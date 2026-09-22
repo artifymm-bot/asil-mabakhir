@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>الأصيل — نظام استخراج فاتورة على السريع</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --navy:#1c2b4a;
+    --navy-2:#233658;
+    --brown:#9c5a28;
+    --orange:#c9822f;
+    --bg:#f6f4ef;
+    --card:#ffffff;
+    --border:#e6ddca;
+    --ink:#241f1a;
+    --muted:#79706260;
+    --muted-2:#79706e;
+    --warn-bg:#fff2e0;
+    --warn-border:#d98c2b;
+    --danger:#b3452f;
+    --danger-bg:#fbeae5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:'Cairo', Tahoma, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height:1.6;
+  }
+  .wrap{ max-width: 980px; margin:0 auto; padding: 24px 16px 60px; }
+
+  /* Header */
+  header.app-head{
+    background: linear-gradient(135deg, var(--navy), var(--navy-2));
+    color:#fff;
+    border-radius: 16px;
+    padding: 26px 22px;
+    margin-bottom: 22px;
+    box-shadow: 0 6px 20px rgba(28,43,74,.18);
+  }
+  header.app-head h1{
+    margin:0 0 6px;
+    font-size: clamp(20px, 4.5vw, 27px);
+    font-weight:800;
+  }
+  header.app-head p.subtitle{
+    margin:0; font-size: 14px; color:#d9e0ee; font-weight:500;
+  }
+
+  footer.dev-credit{
+    text-align:center;
+    font-size: 12.5px;
+    color: var(--muted-2);
+    margin: 30px 0 6px;
+    font-weight:600;
+  }
+
+  /* Sections */
+  section.card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 18px;
+  }
+  section.card > h2{
+    font-size: 16px;
+    font-weight:800;
+    color: var(--navy);
+    margin: 0 0 14px;
+    display:flex; align-items:center; gap:8px;
+  }
+
+  /* Client fields */
+  .client-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field label{ font-size:12.5px; font-weight:700; color: var(--muted-2); }
+  .field input[type=text], .field textarea{
+    font-family:inherit;
+    font-size: 14.5px;
+    padding: 10px 12px;
+    border:1px solid var(--border);
+    border-radius: 9px;
+    background:#fdfcfa;
+    color: var(--ink);
+    width:100%;
+  }
+  .field input:focus, .field textarea:focus{
+    outline:none; border-color: var(--orange);
+  }
+  .readonly-badge{
+    padding: 10px 12px;
+    border:1px dashed var(--border);
+    border-radius: 9px;
+    background: #f3efe4;
+    font-weight:700;
+    color: var(--navy);
+    font-size: 14.5px;
+  }
+  .field textarea{ resize: vertical; min-height: 64px; font-family:inherit; }
+  .notes-field{ grid-column: 1 / -1; }
+
+  /* Items */
+  .toolbar-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
+  button{
+    font-family:inherit;
+    cursor:pointer;
+    border-radius: 10px;
+    font-weight:700;
+    font-size: 14px;
+    border: none;
+    padding: 11px 18px;
+    transition: transform .12s ease, opacity .12s ease;
+  }
+  button:active{ transform: scale(.97); }
+  .btn-add{
+    background: var(--orange);
+    color:#fff;
+  }
+  .btn-clear{
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid rgba(179,69,47,.25);
+  }
+  .btn-pdf{
+    background: var(--navy);
+    color:#fff;
+  }
+  .btn-whatsapp{
+    background: #1f9e56;
+    color:#fff;
+  }
+  .actions-row{
+    display:flex; flex-wrap:wrap; gap:10px; margin-top: 16px;
+  }
+
+  #emptyState{
+    text-align:center;
+    padding: 34px 16px;
+    color: var(--muted-2);
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    font-size: 14.5px;
+    font-weight:600;
+  }
+
+  #itemsContainer{ display:flex; flex-direction:column; gap:12px; }
+
+  .item-card{
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    background: #fdfcf9;
+  }
+  .item-card.dup{
+    border-color: var(--warn-border);
+    background: var(--warn-bg);
+  }
+  .item-card-head{
+    display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;
+  }
+  .item-code-badge{
+    display:inline-block;
+    background: var(--navy);
+    color:#fff;
+    font-weight:800;
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 8px;
+  }
+  .del-btn{
+    background: var(--danger-bg);
+    color: var(--danger);
+    border:none;
+    width: 30px; height:30px;
+    border-radius: 8px;
+    font-size: 17px;
+    line-height:1;
+    font-weight:800;
+    padding:0;
+  }
+  .item-field{ display:flex; flex-direction:column; gap:5px; margin-bottom: 10px; }
+  .item-field label{ font-size:12px; font-weight:700; color: var(--muted-2); }
+  .item-field select{
+    font-family:inherit;
+    font-size: 14px;
+    padding: 10px 10px;
+    border:1px solid var(--border);
+    border-radius: 9px;
+    background:#fff;
+    color: var(--ink);
+    width:100%;
+    appearance:auto;
+  }
+  .item-field select:focus{ outline:none; border-color: var(--orange); }
+  .dup-warning{
+    margin-top:6px;
+    color: var(--warn-border);
+    font-weight:800;
+    font-size: 13px;
+  }
+  .item-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+  .item-grid input[type=number]{
+    font-family:inherit;
+    font-size: 14.5px;
+    padding: 9px 10px;
+    border:1px solid var(--border);
+    border-radius: 9px;
+    background:#fff;
+    color: var(--ink);
+    width:100%;
+  }
+  .item-grid input[type=number]:focus{ outline:none; border-color: var(--orange); }
+  .item-total{
+    padding: 9px 10px;
+    border-radius: 9px;
+    background: #f3efe4;
+    color: var(--navy);
+    font-weight:800;
+    font-size: 14.5px;
+  }
+
+  .grand-total-bar{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: var(--navy);
+    color:#fff;
+    border-radius: 12px;
+    font-weight:800;
+    font-size: 16px;
+  }
+
+  /* Invoice preview */
+  #invoicePreview{
+    background:#fff;
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid var(--border);
+  }
+  .inv-company{
+    text-align:center;
+    font-size: 19px;
+    font-weight:800;
+    color: var(--navy);
+    margin-bottom:2px;
+  }
+  .inv-title{
+    text-align:center;
+    font-size: 15px;
+    font-weight:700;
+    color: var(--orange);
+    margin-bottom: 18px;
+    letter-spacing: .5px;
+  }
+  .inv-meta{
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+    margin-bottom: 18px;
+    font-size: 13.5px;
+  }
+  .inv-meta div b{ color: var(--navy); }
+  table.inv-table{
+    width:100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  table.inv-table th{
+    background: var(--navy);
+    color:#fff;
+    padding: 9px 8px;
+    text-align:right;
+  }
+  table.inv-table td{
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    text-align:right;
+  }
+  .pv-empty{ text-align:center !important; color: var(--muted-2); padding: 16px !important; }
+  .inv-grand{
+    display:flex; justify-content:flex-end;
+    margin-top: 14px;
+    font-size: 15.5px;
+    font-weight:800;
+    color: var(--navy);
+  }
+  #pNotesBlock{
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+    font-size: 13.5px;
+  }
+  #pNotesBlock b{ color: var(--navy); display:block; margin-bottom:4px; }
+
+  @media (max-width: 640px){
+    .client-grid{ grid-template-columns: 1fr; }
+    .item-grid{ grid-template-columns: 1fr 1fr; }
+    .item-grid > .item-field:nth-child(3){ grid-column: 1 / -1; }
+    .inv-meta{ flex-direction:column; }
+    table.inv-table{ font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="app-head">
+    <h1>الأصيل — نظام استخراج فاتورة على السريع</h1>
+    <p class="subtitle">قائمة الأصناف والأسعار — تعديل الكود والكمية والسعر ثم تصدير ومشاركة PDF</p>
+  </header>
+
+  <section class="card">
+    <h2>بيانات الفاتورة</h2>
+    <div class="client-grid">
+      <div class="field">
+        <label>اسم العميل</label>
+        <input type="text" id="clientName" placeholder="اسم العميل">
+      </div>
+      <div class="field">
+        <label>رقم الفاتورة</label>
+        <div class="readonly-badge" id="invoiceNoDisplay">—</div>
+      </div>
+      <div class="field">
+        <label>التاريخ</label>
+        <div class="readonly-badge" id="dateDisplay">—</div>
+      </div>
+      <div class="field notes-field">
+        <label>ملاحظات</label>
+        <textarea id="notesInput" placeholder="اكتب أي ملاحظات أو تفاصيل إضافية للفاتورة..."></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar-row">
+      <h2 style="margin:0;">الأصناف</h2>
+      <button class="btn-add" onclick="addItem()">+ إضافة صنف</button>
+    </div>
+
+    <div id="emptyState">لم تتم إضافة أصناف بعد. اضغط «+ إضافة صنف» لبدء الفاتورة.</div>
+    <div id="itemsContainer"></div>
+
+    <div class="grand-total-bar">
+      <span>الإجمالي الكلي</span>
+      <span id="grandTotalDisplay">0 ج.م</span>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn-clear" onclick="clearInvoice()">مسح الكل</button>
+      <button class="btn-pdf" onclick="exportPDF()">📄 تصدير PDF</button>
+      <button class="btn-whatsapp" onclick="shareWhatsApp()">🟢 إرسال إلى واتساب</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>معاينة الفاتورة</h2>
+    <div id="invoicePreview">
+      <div class="inv-company">الأصيل للاستيراد الفوحات والمباخر</div>
+      <div class="inv-title">فاتورة</div>
+      <div class="inv-meta">
+        <div><b>العميل:</b> <span id="pClient">—</span></div>
+        <div><b>رقم الفاتورة:</b> <span id="pInvNo">—</span></div>
+        <div><b>التاريخ:</b> <span id="pDate">—</span></div>
+      </div>
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>كود الصنف</th>
+            <th>اسم الصنف</th>
+            <th>الكمية</th>
+            <th>السعر</th>
+            <th>الإجمالي</th>
+          </tr>
+        </thead>
+        <tbody id="pInvoiceRows">
+          <tr><td colspan="5" class="pv-empty">لا توجد أصناف مضافة بعد</td></tr>
+        </tbody>
+      </table>
+      <div class="inv-grand">الإجمالي الكلي: <span id="pGrandTotal" style="margin-inline-start:6px;">0 ج.م</span></div>
+      <div id="pNotesBlock" style="display:none;">
+        <b>ملاحظات</b>
+        <span id="pNotesText"></span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="dev-credit">برمجة وتطوير محمد حسني احمد</footer>
+</div>
+
+<script>
+/* =========================================================
+   بيانات المنتجات — لا تعدَّل الأكواد أو الأسعار
+   ========================================================= */
+const PRODUCTS = [
+  // مباخر الفحم والكهرباء
+  {code:"8-17", name:"مبخرة فحم", price:90, category:"مباخر الفحم والكهرباء"},
+  {code:"8-11", name:"مبخرة فحم", price:100, category:"مباخر الفحم والكهرباء"},
+  {code:"8-8", name:"مبخرة اسلامي صغير فحم", price:100, category:"مباخر الفحم والكهرباء"},
+  {code:"8-3", name:"مبخرة فحم مأذنة", price:125, category:"مباخر الفحم والكهرباء"},
+  {code:"1-23", name:"مبخرة بورسلين بقاعدة", price:125, category:"مباخر الفحم والكهرباء"},
+  {code:"1-24", name:"مبخرة فحم", price:135, category:"مباخر الفحم والكهرباء"},
+  {code:"1-3", name:"مبخرة كورة صغير فحم", price:135, category:"مباخر الفحم والكهرباء"},
+  {code:"8-5", name:"مبخرة فحم", price:145, category:"مباخر الفحم والكهرباء"},
+  {code:"8-7", name:"مبخرة فحم", price:145, category:"مباخر الفحم والكهرباء"},
+  {code:"8-6", name:"مبخرة فحم", price:145, category:"مباخر الفحم والكهرباء"},
+  {code:"1-7", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"8-27", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"8-9", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"8-18", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"8-10", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"1-4", name:"مبخرة فحم", price:180, category:"مباخر الفحم والكهرباء"},
+  {code:"1-5", name:"مبخرة ريشة بورسلين", price:200, category:"مباخر الفحم والكهرباء"},
+  {code:"1-9", name:"مبخرة فحم", price:250, category:"مباخر الفحم والكهرباء"},
+  {code:"1-6", name:"مبخرة فحم", price:250, category:"مباخر الفحم والكهرباء"},
+  {code:"1-1", name:"طقم صواني دائري فحم", price:575, category:"مباخر الفحم والكهرباء"},
+  {code:"1-2", name:"طقم صواني مربع فحم", price:575, category:"مباخر الفحم والكهرباء"},
+  {code:"1-8", name:"ماسك فحم", price:20, category:"مباخر الفحم والكهرباء"},
+  {code:"1-10", name:"مبخرة كورة كهربا صغير", price:185, category:"مباخر الفحم والكهرباء"},
+  {code:"1-11", name:"مبخرة إسلامي كهربا وسط", price:200, category:"مباخر الفحم والكهرباء"},
+  {code:"1-12", name:"مبخرة كهربا ريشة", price:200, category:"مباخر الفحم والكهرباء"},
+  {code:"1-25", name:"مبخرة كهربا كورة وسط", price:225, category:"مباخر الفحم والكهرباء"},
+  {code:"1-13", name:"مبخرة كهربا", price:285, category:"مباخر الفحم والكهرباء"},
+  {code:"1-16", name:"مبخرة كهربا", price:335, category:"مباخر الفحم والكهرباء"},
+  {code:"1-14", name:"مبخرة كهربا", price:335, category:"مباخر الفحم والكهرباء"},
+  {code:"1-15", name:"مبخرة كهربا", price:335, category:"مباخر الفحم والكهرباء"},
+  {code:"1-18", name:"مبخرة كهربا", price:335, category:"مباخر الفحم والكهرباء"},
+  {code:"1-17", name:"مبخرة واباجورة", price:350, category:"مباخر الفحم والكهرباء"},
+  {code:"1-19", name:"مبخرة واباجورة", price:385, category:"مباخر الفحم والكهرباء"},
+  {code:"1-21", name:"مبخرة وإباجورة", price:385, category:"مباخر الفحم والكهرباء"},
+  {code:"1-27", name:"مبخرة وإباجورة", price:385, category:"مباخر الفحم والكهرباء"},
+  {code:"1-20", name:"مبخرة وإباجورة", price:385, category:"مباخر الفحم والكهرباء"},
+  {code:"8-1", name:"مبخرة وإباجورة فحم", price:450, category:"مباخر الفحم والكهرباء"},
+  {code:"1-26", name:"مبخرة واباجورة كهربا", price:520, category:"مباخر الفحم والكهرباء"},
+  {code:"1-22", name:"مبخرة وإباجورة كهربا", price:520, category:"مباخر الفحم والكهرباء"},
+  {code:"1-28", name:"مبخرة بخور الكترونية شحن", price:550, category:"مباخر الفحم والكهرباء"},
+
+  // USB والأجهزة والفواحات
+  {code:"9-1", name:"USB X50", price:75, category:"USB والأجهزة والفواحات"},
+  {code:"9-5", name:"تسلا USB", price:95, category:"USB والأجهزة والفواحات"},
+  {code:"9-3", name:"H2O USB", price:100, category:"USB والأجهزة والفواحات"},
+  {code:"9-12", name:"بركان USB", price:160, category:"USB والأجهزة والفواحات"},
+  {code:"9-4", name:"كبير H2O USB", price:115, category:"USB والأجهزة والفواحات"},
+  {code:"9-8", name:"خشبي USB", price:125, category:"USB والأجهزة والفواحات"},
+  {code:"9-9", name:"خشبي كورة USB", price:125, category:"USB والأجهزة والفواحات"},
+  {code:"9-16", name:"خشبي USB", price:125, category:"USB والأجهزة والفواحات"},
+  {code:"9-7", name:"نيزك USB", price:150, category:"USB والأجهزة والفواحات"},
+  {code:"9-11", name:"عصفورة USB", price:185, category:"USB والأجهزة والفواحات"},
+  {code:"9-13", name:"بيت الغزال USB", price:185, category:"USB والأجهزة والفواحات"},
+  {code:"9-6", name:"دبدوب USB", price:185, category:"USB والأجهزة والفواحات"},
+  {code:"9-10", name:"جمر USB", price:185, category:"USB والأجهزة والفواحات"},
+  {code:"2-8", name:"قمر كبير USB", price:200, category:"USB والأجهزة والفواحات"},
+  {code:"2-9", name:"زوحل USB", price:230, category:"USB والأجهزة والفواحات"},
+  {code:"117-09", name:"كبير USB", price:230, category:"USB والأجهزة والفواحات"},
+  {code:"9-2", name:"بيانو USB", price:300, category:"USB والأجهزة والفواحات"},
+  {code:"2-7", name:"لهب الغزال", price:300, category:"USB والأجهزة والفواحات"},
+  {code:"9-14", name:"فواحة الجرامافون", price:950, category:"USB والأجهزة والفواحات"},
+  {code:"FT-504A", name:"خشبي بدون بلوتوث", price:515, category:"USB والأجهزة والفواحات"},
+  {code:"T269", name:"وردة وعباد", price:550, category:"USB والأجهزة والفواحات"},
+  {code:"2-2", name:"دمعة كبير", price:550, category:"USB والأجهزة والفواحات"},
+  {code:"117-02", name:"بلوتوث ابيض", price:550, category:"USB والأجهزة والفواحات"},
+  {code:"117-2-1", name:"رفيع الوان", price:550, category:"USB والأجهزة والفواحات"},
+  {code:"117-01", name:"طوق عريض", price:550, category:"USB والأجهزة والفواحات"},
+  {code:"T-298P", name:"رفيع اسود", price:570, category:"USB والأجهزة والفواحات"},
+  {code:"2-6", name:"جادور اسود", price:590, category:"USB والأجهزة والفواحات"},
+  {code:"T-569P", name:"عمود 2x1", price:590, category:"USB والأجهزة والفواحات"},
+  {code:"T-2213", name:"دورق كبير", price:590, category:"USB والأجهزة والفواحات"},
+  {code:"T-605", name:"بكرة 4 عادي", price:850, category:"USB والأجهزة والفواحات"},
+  {code:"2-5", name:"تاتش شفاف", price:850, category:"USB والأجهزة والفواحات"},
+  {code:"2-3", name:"تاتش اسود وابيض", price:865, category:"USB والأجهزة والفواحات"},
+  {code:"T-331", name:"ديجتال شاشة", price:950, category:"USB والأجهزة والفواحات"},
+  {code:"T-606", name:"ديجتال 4 لتر", price:1200, category:"USB والأجهزة والفواحات"},
+  {code:"T-517", name:"البازوكا", price:1400, category:"USB والأجهزة والفواحات"},
+  {code:"T-2310", name:"رافال 9 لتر", price:2200, category:"USB والأجهزة والفواحات"},
+  {code:"2-1", name:"جهاز تعطير المنزل", price:2500, category:"USB والأجهزة والفواحات"},
+  {code:"2-10", name:"جهاز التعطير الذكي للبيت والسيارة", price:985, category:"USB والأجهزة والفواحات"},
+
+  // فريسكا
+  {code:"10-7", name:"فريسكا", price:14, category:"فريسكا"},
+  {code:"7-2", name:"فريسكا مشكل", price:15, category:"فريسكا"},
+  {code:"10-5", name:"فريسكا AROMA THERAPIE", price:16, category:"فريسكا"},
+  {code:"10-3", name:"فريسكا", price:17, category:"فريسكا"},
+  {code:"10-6", name:"فريسكا", price:17, category:"فريسكا"},
+  {code:"7-3", name:"مشكل الوان", price:20, category:"فريسكا"},
+  {code:"10-1", name:"فريسكا الوان AROMA THERAPIE", price:20, category:"فريسكا"},
+];
+
+/* =========================================================
+   الحالة العامة
+   ========================================================= */
+let items = [];
+let nextId = 1;
+let invoiceNumber = "";
+
+/* =========================================================
+   دوال مساعدة
+   ========================================================= */
+function formatMoney(n){
+  const num = Number(n) || 0;
+  const rounded = Math.round(num * 100) / 100;
+  const text = (rounded % 1 === 0) ? String(rounded) : rounded.toFixed(2);
+  return text + " ج.م";
+}
+
+function generateInvoiceNumber(){
+  invoiceNumber = String(Date.now()).slice(-6);
+}
+
+function formatDate(){
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function isDuplicate(item){
+  if(!item.code) return false;
+  return items.filter(i => i.code === item.code).length > 1;
+}
+
+function calculateItemTotal(item){
+  return (Number(item.qty) || 0) * (Number(item.price) || 0);
+}
+
+function calculateTotal(){
+  return items.reduce((sum, i) => sum + calculateItemTotal(i), 0);
+}
+
+function categoryOptionsHTML(selectedCode){
+  const cats = {};
+  PRODUCTS.forEach(p => {
+    if(!cats[p.category]) cats[p.category] = [];
+    cats[p.category].push(p);
+  });
+  return Object.keys(cats).map(cat => {
+    const opts = cats[cat].map(p => {
+      const sel = p.code === selectedCode ? "selected" : "";
+      return `<option value="${p.code}" ${sel}>${p.code} — ${p.name} — ${formatMoney(p.price)}</option>`;
+    }).join("");
+    return `<optgroup label="${cat}">${opts}</optgroup>`;
+  }).join("");
+}
+
+/* =========================================================
+   إدارة الأصناف
+   ========================================================= */
+function addItem(){
+  items.push({ id: nextId++, code: "", name: "", price: 0, qty: 1 });
+  renderItems();
+  renderInvoice();
+}
+
+function removeItem(id){
+  items = items.filter(i => i.id !== id);
+  renderItems();
+  renderInvoice();
+}
+
+function selectProduct(id, code){
+  const item = items.find(i => i.id === id);
+  const product = PRODUCTS.find(p => p.code === code);
+  if(!item || !product) return;
+  item.code = product.code;
+  item.name = product.name;
+  item.price = product.price;
+  item.qty = 1;
+  renderItems();
+  renderInvoice();
+}
+
+function updateQty(id, val){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  item.qty = Math.max(1, parseInt(val, 10) || 1);
+  updateRowTotal(id);
+  renderInvoice();
+}
+
+function updatePrice(id, val){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  item.price = Math.max(0, parseFloat(val) || 0);
+  updateRowTotal(id);
+  renderInvoice();
+}
+
+function updateRowTotal(id){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  const card = document.querySelector(`.item-card[data-id="${id}"]`);
+  if(card){
+    const totalEl = card.querySelector(".item-total");
+    if(totalEl) totalEl.textContent = formatMoney(calculateItemTotal(item));
+  }
+  document.getElementById("grandTotalDisplay").textContent = formatMoney(calculateTotal());
+}
+
+function clearInvoice(){
+  if(items.length === 0) return;
+  if(confirm("مسح جميع الأصناف؟")){
+    items = [];
+    renderItems();
+    renderInvoice();
+  }
+}
+
+/* =========================================================
+   الرسم (Rendering)
+   ========================================================= */
+function itemCardHTML(item){
+  const dup = isDuplicate(item);
+  return `
+  <div class="item-card ${dup ? "dup" : ""}" data-id="${item.id}">
+    <div class="item-card-head">
+      <span class="item-code-badge">${item.code || "—"}</span>
+      <button class="del-btn" onclick="removeItem(${item.id})" aria-label="حذف الصنف">×</button>
+    </div>
+    <div class="item-field">
+      <label>اختيار الصنف</label>
+      <select onchange="selectProduct(${item.id}, this.value)">
+        <option value="" ${!item.code ? "selected" : ""} disabled>▼ اضغط هنا لاختيار الصنف</option>
+        ${categoryOptionsHTML(item.code)}
+      </select>
+      ${dup ? '<div class="dup-warning">⚠️ هذا الصنف مضاف بالفعل</div>' : ""}
+    </div>
+    <div class="item-grid">
+      <div class="item-field">
+        <label>الكمية</label>
+        <input type="number" min="1" value="${item.qty}" oninput="updateQty(${item.id}, this.value)">
+      </div>
+      <div class="item-field">
+        <label>السعر</label>
+        <input type="number" min="0" step="0.01" value="${item.price}" oninput="updatePrice(${item.id}, this.value)">
+      </div>
+      <div class="item-field">
+        <label>الإجمالي</label>
+        <div class="item-total">${formatMoney(calculateItemTotal(item))}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderItems(){
+  const container = document.getElementById("itemsContainer");
+  const emptyState = document.getElementById("emptyState");
+  if(items.length === 0){
+    container.innerHTML = "";
+    emptyState.style.display = "block";
+  } else {
+    emptyState.style.display = "none";
+    container.innerHTML = items.map(itemCardHTML).join("");
+  }
+  document.getElementById("grandTotalDisplay").textContent = formatMoney(calculateTotal());
+}
+
+function renderInvoice(){
+  document.getElementById("pClient").textContent = document.getElementById("clientName").value.trim() || "—";
+  document.getElementById("pInvNo").textContent = invoiceNumber;
+  document.getElementById("pDate").textContent = formatDate();
+
+  const rows = items.filter(i => i.code);
+  const tbody = document.getElementById("pInvoiceRows");
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="5" class="pv-empty">لا توجد أصناف مضافة بعد</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(i => `
+      <tr>
+        <td>${i.code}</td>
+        <td>${i.name}</td>
+        <td>${i.qty}</td>
+        <td>${formatMoney(i.price)}</td>
+        <td>${formatMoney(calculateItemTotal(i))}</td>
+      </tr>`).join("");
+  }
+
+  document.getElementById("pGrandTotal").textContent = formatMoney(calculateTotal());
+
+  const notes = document.getElementById("notesInput").value.trim();
+  const notesBlock = document.getElementById("pNotesBlock");
+  if(notes){
+    notesBlock.style.display = "block";
+    document.getElementById("pNotesText").textContent = notes;
+  } else {
+    notesBlock.style.display = "none";
+  }
+}
+
+/* =========================================================
+   تصدير ومشاركة PDF
+   ========================================================= */
+function buildPdfOptions(filename){
+  return {
+    margin: 10,
+    filename: filename,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+  };
+}
+
+async function saveFileToViewer(filename, blob){
+  try{
+    const downloads = await claude.use("downloads");
+    if(!downloads){
+      alert("حفظ الملفات غير متاح في هذا العرض.");
+      return false;
+    }
+    await downloads.save({ filename, data: blob });
+    return true;
+  }catch(err){
+    if(err && err.code === "declined"){
+      return false;
+    }
+    console.error("saveFileToViewer error:", err);
+    alert("تعذّر حفظ الملف، حاول مرة أخرى.");
+    return false;
+  }
+}
+
+async function exportPDF(){
+  if(items.filter(i => i.code).length === 0){
+    alert("أضف صنف واحد على الأقل قبل تصدير الفاتورة");
+    return;
+  }
+  const element = document.getElementById("invoicePreview");
+  const filename = `فاتورة-الأصيل-${invoiceNumber}.pdf`;
+  const opt = buildPdfOptions(filename);
+  try{
+    const blob = await html2pdf().set(opt).from(element).outputPdf("blob");
+    await saveFileToViewer(filename, blob);
+  }catch(err){
+    console.error("exportPDF error:", err);
+    alert("حدث خطأ أثناء تجهيز ملف PDF، حاول مرة أخرى.");
+  }
+}
+
+async function shareWhatsApp(){
+  if(items.filter(i => i.code).length === 0){
+    alert("أضف صنف واحد على الأقل قبل الإرسال");
+    return;
+  }
+  const element = document.getElementById("invoicePreview");
+  const filename = `فاتورة-الأصيل-${invoiceNumber}.pdf`;
+  const opt = buildPdfOptions(filename);
+
+  try{
+    const blob = await html2pdf().set(opt).from(element).outputPdf("blob");
+    const file = new File([blob], filename, { type: "application/pdf" });
+
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({
+          files: [file],
+          title: "فاتورة الأصيل",
+          text: `فاتورة رقم ${invoiceNumber}`
+        });
+        return;
+      }catch(shareErr){
+        // fall through to the save capability below
+      }
+    }
+
+    const saved = await saveFileToViewer(filename, blob);
+    if(saved){
+      alert("تم حفظ ملف PDF. افتح واتساب وأرفق الملف يدويًا من مكان الحفظ.");
+      window.open("https://wa.me/", "_blank");
+    }
+  }catch(err){
+    console.error("shareWhatsApp error:", err);
+    alert("حدث خطأ أثناء تجهيز ملف PDF، حاول مرة أخرى.");
+  }
+}
+
+/* =========================================================
+   بدء التشغيل
+   ========================================================= */
+function init(){
+  generateInvoiceNumber();
+  document.getElementById("invoiceNoDisplay").textContent = invoiceNumber;
+  document.getElementById("dateDisplay").textContent = formatDate();
+
+  document.getElementById("clientName").addEventListener("input", renderInvoice);
+  document.getElementById("notesInput").addEventListener("input", renderInvoice);
+
+  renderItems();
+  renderInvoice();
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
