@@ -992,6 +992,14 @@ async function generateInvoicePDFBlob(filename){
     "z-index:-1"
   ].join(";");
 
+  // مهم: لا نضع النسخة المؤقتة خارج نافذة العرض مع z-index سالب؛
+  // بعض إصدارات html2canvas قد تعتبرها غير قابلة للرسم فتنتج Canvas أبيض.
+  // نضعها داخل الصفحة بشكل طبيعي وبشفافية شبه كاملة، ثم نحذفها فورًا.
+  clone.style.left = "0";
+  clone.style.top = "0";
+  clone.style.opacity = "0.01";
+  clone.style.pointerEvents = "none";
+  clone.style.zIndex = "2147483647";
   document.body.appendChild(clone);
 
   try{
@@ -1003,12 +1011,37 @@ async function generateInvoicePDFBlob(filename){
         backgroundColor: "#ffffff",
         logging: false,
         windowWidth: 794,
+        windowHeight: Math.max(1000, clone.scrollHeight + 100),
         scrollX: 0,
         scrollY: 0
       });
 
       if(!canvas.width || !canvas.height){
         throw new Error("تعذر إنشاء صورة الفاتورة");
+      }
+
+      // تحقق فعلي من أن الـCanvas يحتوي على رسم وليس صفحة بيضاء.
+      // نتحقق من حجم الصورة ومن عينات بكسلات موزعة على الصفحة.
+      const imgDataUrl = canvas.toDataURL("image/jpeg", 0.98);
+      let hasVisiblePixels = false;
+      const ctxCheck = canvas.getContext("2d", { willReadFrequently: true });
+      if(ctxCheck){
+        const stepX = Math.max(1, Math.floor(canvas.width / 40));
+        const stepY = Math.max(1, Math.floor(canvas.height / 40));
+        outer:
+        for(let y = 0; y < canvas.height; y += stepY){
+          for(let x = 0; x < canvas.width; x += stepX){
+            const px = ctxCheck.getImageData(x, y, 1, 1).data;
+            if(px[3] > 0 && (px[0] < 245 || px[1] < 245 || px[2] < 245)){
+              hasVisiblePixels = true;
+              break outer;
+            }
+          }
+        }
+      }
+
+      if(!hasVisiblePixels || imgDataUrl.length < 10000){
+        throw new Error("تم إنشاء Canvas فارغ؛ إعادة المحاولة بطريقة مباشرة");
       }
 
       const JsPDF = getJsPDFConstructor();
@@ -1020,7 +1053,7 @@ async function generateInvoicePDFBlob(filename){
       const usableHeight = pageHeight - (margin * 2);
       const imageWidth = usableWidth;
       const imageHeight = canvas.height * imageWidth / canvas.width;
-      const imgData = canvas.toDataURL("image/jpeg", 0.98);
+      const imgData = imgDataUrl;
 
       // إذا كانت الفاتورة أطول من صفحة، نقسم الصورة على صفحات A4.
       if(imageHeight <= usableHeight){
@@ -1057,6 +1090,53 @@ async function generateInvoicePDFBlob(filename){
       }
 
       return pdf.output("blob");
+    }
+
+    // محاولة ثانية: التقاط المعاينة الأصلية مباشرة إذا فشل التقاط النسخة المؤقتة.
+    // هذا يمنع اعتماد التصدير على سلوك DOM clone في بعض المتصفحات.
+    if(window.html2canvas){
+      const directCanvas = await window.html2canvas(source, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false
+      });
+      if(directCanvas.width && directCanvas.height){
+        const directData = directCanvas.toDataURL("image/jpeg", 0.98);
+        if(directData.length >= 10000){
+          const JsPDF = getJsPDFConstructor();
+          const pdf = new JsPDF("p", "mm", "a4");
+          const margin = 10;
+          const usableWidth = 210 - (margin * 2);
+          const usableHeight = 297 - (margin * 2);
+          const imageHeight = directCanvas.height * usableWidth / directCanvas.width;
+          if(imageHeight <= usableHeight){
+            pdf.addImage(directData, "JPEG", margin, margin, usableWidth, imageHeight);
+          }else{
+            const pageCanvas = document.createElement("canvas");
+            const pagePixelHeight = Math.floor(directCanvas.width * usableHeight / usableWidth);
+            pageCanvas.width = directCanvas.width;
+            let sourceY = 0;
+            let firstPage = true;
+            while(sourceY < directCanvas.height){
+              const sliceHeight = Math.min(pagePixelHeight, directCanvas.height - sourceY);
+              pageCanvas.height = sliceHeight;
+              const ctx = pageCanvas.getContext("2d");
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(0, 0, pageCanvas.width, sliceHeight);
+              ctx.drawImage(directCanvas, 0, sourceY, directCanvas.width, sliceHeight, 0, 0, directCanvas.width, sliceHeight);
+              const sliceData = pageCanvas.toDataURL("image/jpeg", 0.98);
+              const sliceMmHeight = sliceHeight * usableWidth / directCanvas.width;
+              if(!firstPage) pdf.addPage();
+              pdf.addImage(sliceData, "JPEG", margin, margin, usableWidth, sliceMmHeight);
+              firstPage = false;
+              sourceY += sliceHeight;
+            }
+          }
+          return pdf.output("blob");
+        }
+      }
     }
 
     // fallback إذا لم تتوفر html2canvas منفردة.
