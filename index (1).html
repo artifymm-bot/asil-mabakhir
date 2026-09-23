@@ -451,7 +451,6 @@
     <div class="actions-row">
       <button class="btn-clear" onclick="clearInvoice()">مسح الكل</button>
       <button class="btn-pdf" onclick="exportPDF()">📄 تصدير PDF</button>
-      <button class="btn-pdf" onclick="exportInvoiceImage()">🖼️ تصدير صورة</button>
       <button class="btn-whatsapp" onclick="shareWhatsApp()">🟢 إرسال إلى واتساب</button>
     </div>
   </section>
@@ -493,7 +492,7 @@
           <span id="pDiscountPercent">0%</span>
         </div>
         <div class="totals-row grand-row">
-          <span>الإجمالي بعد الخصم</span>
+          <span>الإجمالي الكلي</span>
           <span id="pGrandTotal">0 ج.م</span>
         </div>
       </div>
@@ -625,7 +624,19 @@ function formatMoney(n){
 }
 
 function generateInvoiceNumber(){
-  invoiceNumber = String(Date.now()).slice(-6);
+  invoiceNumber = String(Date.now()).slice(-6).padStart(6, "0");
+}
+
+function getInvoiceFileBaseName(){
+  const client = (document.getElementById("clientName")?.value || "عميل")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "_")
+    .slice(0, 60) || "عميل";
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return client + "-" + dd + "-" + mm + "-" + invoiceNumber;
 }
 
 function formatDate(){
@@ -963,7 +974,7 @@ function preparePrintInvoice(){
   doc.open();
   doc.write(`<!doctype html><html lang="ar" dir="rtl"><head>
     <meta charset="UTF-8">
-    <title>فاتورة الأصيل-${invoiceNumber}</title>
+    <title>${getInvoiceFileBaseName()}</title>
     <style>
       ${styles}
       @page{size:A4;margin:10mm}
@@ -1019,7 +1030,7 @@ async function exportPDF(){
   لا يعتمد على html2canvas أو jsPDF، وبالتالي لا يمكن أن ينتج Canvas أبيض.
   SVG ملف صورة ويمكن فتحه وإرساله، كما يمكن طباعته/تحويله إلى PNG من الهاتف.
 */
-function exportInvoiceImage(){
+function exportInvoiceImage(onReady){
   if(items.filter(i => i.code).length === 0){
     alert("أضف صنف واحد على الأقل قبل تصدير الصورة");
     return;
@@ -1099,11 +1110,15 @@ function exportInvoiceImage(){
         canvas.toBlob(function(blob){
           URL.revokeObjectURL(svgUrl);
           if(!blob) throw new Error("تعذر إنشاء PNG");
+          if(typeof onReady === "function"){
+            onReady(blob);
+            return;
+          }
 
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.download = `فاتورة-الأصيل-${invoiceNumber}.png`;
+          link.download = getInvoiceFileBaseName() + ".png";
           document.body.appendChild(link);
           link.click();
           link.remove();
@@ -1125,6 +1140,7 @@ function exportInvoiceImage(){
     img.src = svgUrl;
   }catch(err){
     console.error("exportInvoiceImage error:", err);
+    if(typeof onReady === "function") onReady(null);
     alert("تعذر إنشاء صورة الفاتورة. حاول مرة أخرى.");
   }
 }
@@ -1135,29 +1151,40 @@ async function shareWhatsApp(){
   }
 
   try{
-    /*
-      مشاركة واتساب الآن تعتمد على نص الطلب، بدون PDF أبيض.
-      على الهاتف يفتح واتساب مباشرة مع بيانات الفاتورة.
-    */
-    const lines = items.filter(i => i.code).map((i, idx) =>
-      `${idx+1}- ${i.name} | كود: ${i.code} | كمية: ${i.qty}`
-    );
+    const blob = await new Promise((resolve, reject) => {
+      exportInvoiceImage((imageBlob) => {
+        if(imageBlob) resolve(imageBlob);
+        else reject(new Error("تعذر إنشاء صورة الفاتورة"));
+      });
+    });
 
+    const file = new File([blob], getInvoiceFileBaseName() + ".png", {type:"image/png"});
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({
+        files:[file],
+        title:"فاتورة الأصيل - " + invoiceNumber,
+        text:"فاتورة العميل " + (document.getElementById("clientName").value.trim() || "—")
+      });
+      return;
+    }
+
+    const lines = items.filter(i => i.code).map((i, idx) =>
+      (idx+1) + "- " + i.name + " | كود: " + i.code + " | كمية: " + i.qty
+    );
     const message = [
-      "الأصيل لإستيراد الفوحات والمباخر",
-      `فاتورة رقم: ${invoiceNumber}`,
-      `العميل: ${document.getElementById("clientName").value.trim() || "—"}`,
+      "الأصيل لاستيراد الفوحات والمباخر",
+      "فاتورة رقم: " + invoiceNumber,
+      "العميل: " + (document.getElementById("clientName").value.trim() || "—"),
       "",
       ...lines,
       "",
-      `الإجمالي بعد الخصم: ${formatMoney(calculateTotal())}`
+      "الإجمالي الكلي: " + formatMoney(calculateTotal())
     ].join("\n");
-
-    const waUrl = "https://wa.me/?text=" + encodeURIComponent(message);
-    window.open(waUrl, "_blank");
+    window.open("https://wa.me/?text=" + encodeURIComponent(message), "_blank");
   }catch(err){
     console.error("shareWhatsApp error:", err);
-    alert("تعذر تجهيز رسالة واتساب. حاول مرة أخرى.");
+    if(err && err.name === "AbortError") return;
+    alert("تعذر مشاركة الفاتورة. حاول مرة أخرى.");
   }
 }
 
