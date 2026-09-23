@@ -109,6 +109,32 @@
   }
   .field textarea{ resize: vertical; min-height: 64px; font-family:inherit; }
   .notes-field{ grid-column: 1 / -1; }
+  .item-notes-field textarea{
+    font-family:inherit;
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border:1px solid var(--border);
+    border-radius: 9px;
+    background:#fff;
+    color: var(--ink);
+    width:100%;
+    resize: vertical;
+    min-height: 40px;
+  }
+  .item-notes-field textarea:focus{ outline:none; border-color: var(--orange); }
+  .discount-percent-input{
+    font-family:inherit;
+    font-size: 14px;
+    font-weight:700;
+    padding: 7px 10px;
+    border:1px solid var(--border);
+    border-radius: 8px;
+    background:#fff;
+    color: var(--ink);
+    width: 90px;
+    text-align:center;
+  }
+  .discount-percent-input:focus{ outline:none; border-color: var(--orange); }
 
   /* Items */
   .toolbar-row{
@@ -282,20 +308,54 @@
   table.inv-table{
     width:100%;
     border-collapse: collapse;
-    font-size: 13.5px;
+    font-size: 13px;
+    border: 1.5px solid var(--navy);
   }
-  table.inv-table th{
+  table.inv-table thead th{
     background: var(--navy);
     color:#fff;
-    padding: 9px 8px;
-    text-align:right;
+    font-weight:700;
+    padding: 9px 6px;
+    text-align:center;
+    border: 1px solid var(--navy);
   }
-  table.inv-table td{
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-    text-align:right;
+  table.inv-table tbody td{
+    padding: 8px 6px;
+    text-align:center;
+    border: 1px solid var(--border);
+    vertical-align: middle;
   }
+  table.inv-table tbody td.cell-name{ text-align:right; }
+  table.inv-table tbody td.cell-notes{ text-align:right; color: var(--muted-2); font-size:12px; }
+  table.inv-table tbody tr:nth-child(even){ background:#faf8f3; }
   .pv-empty{ text-align:center !important; color: var(--muted-2); padding: 16px !important; }
+
+  .totals-block{
+    margin-top: 16px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .totals-row{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 8px 12px;
+    background:#f3efe4;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight:700;
+    color: var(--navy);
+  }
+  .totals-row.discount-value-row{ color: var(--danger); background: var(--danger-bg); }
+  #pTotalsBlock .totals-row{ background:transparent; border-bottom:1px dashed var(--border); border-radius:0; padding:6px 0; font-size:13.5px; }
+  #pTotalsBlock .grand-row{ border-bottom:none; margin-top:6px; padding-top:10px; border-top:1.5px solid var(--navy); font-size:15.5px; }
+  #pAmountWords{
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight:700;
+    color: var(--navy);
+    background:#f3efe4;
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
   .inv-grand{
     display:flex; justify-content:flex-end;
     margin-top: 14px;
@@ -311,12 +371,18 @@
   }
   #pNotesBlock b{ color: var(--navy); display:block; margin-bottom:4px; }
 
+  .add-item-below{
+    margin-top: 4px;
+  }
+  .add-item-below button{ width:100%; }
+
   @media (max-width: 640px){
     .client-grid{ grid-template-columns: 1fr; }
     .item-grid{ grid-template-columns: 1fr 1fr; }
     .item-grid > .item-field:nth-child(3){ grid-column: 1 / -1; }
     .inv-meta{ flex-direction:column; }
-    table.inv-table{ font-size: 12px; }
+    table.inv-table{ font-size: 11px; }
+    table.inv-table thead th, table.inv-table tbody td{ padding: 6px 4px; }
   }
 </style>
 </head>
@@ -354,15 +420,32 @@
   <section class="card">
     <div class="toolbar-row">
       <h2 style="margin:0;">الأصناف</h2>
-      <button class="btn-add" onclick="addItem()">+ إضافة صنف</button>
     </div>
 
     <div id="emptyState">لم تتم إضافة أصناف بعد. اضغط «+ إضافة صنف» لبدء الفاتورة.</div>
     <div id="itemsContainer"></div>
 
-    <div class="grand-total-bar">
-      <span>الإجمالي الكلي</span>
-      <span id="grandTotalDisplay">0 ج.م</span>
+    <div class="add-item-below">
+      <button class="btn-add" onclick="addItem()">+ إضافة صنف</button>
+    </div>
+
+    <div class="totals-block">
+      <div class="totals-row">
+        <span>الإجمالي قبل الخصم</span>
+        <span id="subTotalDisplay">0 ج.م</span>
+      </div>
+      <div class="totals-row">
+        <span>نسبة الخصم %</span>
+        <input type="number" id="discountPercent" class="discount-percent-input" min="0" max="100" step="0.01" value="0" oninput="updateDiscount(this.value)">
+      </div>
+      <div class="totals-row discount-value-row">
+        <span>قيمة الخصم</span>
+        <span id="discountAmountDisplay">0 ج.م</span>
+      </div>
+      <div class="grand-total-bar">
+        <span>الإجمالي بعد الخصم</span>
+        <span id="grandTotalDisplay">0 ج.م</span>
+      </div>
     </div>
 
     <div class="actions-row">
@@ -385,18 +468,36 @@
       <table class="inv-table">
         <thead>
           <tr>
+            <th>م</th>
             <th>كود الصنف</th>
-            <th>اسم الصنف</th>
+            <th>الاسم</th>
             <th>الكمية</th>
             <th>السعر</th>
             <th>الإجمالي</th>
+            <th>ملاحظات</th>
           </tr>
         </thead>
         <tbody id="pInvoiceRows">
-          <tr><td colspan="5" class="pv-empty">لا توجد أصناف مضافة بعد</td></tr>
+          <tr><td class="pv-empty" colspan="7">لا توجد أصناف مضافة بعد</td></tr>
         </tbody>
       </table>
-      <div class="inv-grand">الإجمالي الكلي: <span id="pGrandTotal" style="margin-inline-start:6px;">0 ج.م</span></div>
+
+      <div class="totals-block" id="pTotalsBlock">
+        <div class="totals-row">
+          <span>الإجمالي قبل الخصم</span>
+          <span id="pSubTotal">0 ج.م</span>
+        </div>
+        <div class="totals-row">
+          <span>نسبة الخصم</span>
+          <span id="pDiscountPercent">0%</span>
+        </div>
+        <div class="totals-row grand-row">
+          <span>الإجمالي بعد الخصم</span>
+          <span id="pGrandTotal">0 ج.م</span>
+        </div>
+      </div>
+      <div id="pAmountWords"></div>
+
       <div id="pNotesBlock" style="display:none;">
         <b>ملاحظات</b>
         <span id="pNotesText"></span>
@@ -510,6 +611,7 @@ const PRODUCTS = [
 let items = [];
 let nextId = 1;
 let invoiceNumber = "";
+let discountPercent = 0;
 
 /* =========================================================
    دوال مساعدة
@@ -542,8 +644,97 @@ function calculateItemTotal(item){
   return (Number(item.qty) || 0) * (Number(item.price) || 0);
 }
 
-function calculateTotal(){
+function calculateSubtotal(){
   return items.reduce((sum, i) => sum + calculateItemTotal(i), 0);
+}
+
+function calculateDiscountAmount(){
+  const pct = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+  return calculateSubtotal() * (pct / 100);
+}
+
+function calculateTotal(){
+  return calculateSubtotal() - calculateDiscountAmount();
+}
+
+/* =========================================================
+   تحويل الرقم إلى كلمات عربية (المبلغ كتابةً)
+   ========================================================= */
+const AR_ONES = ["", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة"];
+const AR_TEENS = ["عشرة", "أحد عشر", "اثنا عشر", "ثلاثة عشر", "أربعة عشر", "خمسة عشر", "ستة عشر", "سبعة عشر", "ثمانية عشر", "تسعة عشر"];
+const AR_TENS = ["", "", "عشرون", "ثلاثون", "أربعون", "خمسون", "ستون", "سبعون", "ثمانون", "تسعون"];
+const AR_HUNDREDS = ["", "مائة", "مئتان", "ثلاثمائة", "أربعمائة", "خمسمائة", "ستمائة", "سبعمائة", "ثمانمائة", "تسعمائة"];
+
+function threeDigitsToWords(n){
+  if(n === 0) return "";
+  const parts = [];
+  const h = Math.floor(n / 100);
+  const rem = n % 100;
+  if(h > 0) parts.push(AR_HUNDREDS[h]);
+  if(rem > 0){
+    if(rem < 10) parts.push(AR_ONES[rem]);
+    else if(rem < 20) parts.push(AR_TEENS[rem - 10]);
+    else {
+      const t = Math.floor(rem / 10);
+      const o = rem % 10;
+      parts.push(o > 0 ? (AR_ONES[o] + " و" + AR_TENS[t]) : AR_TENS[t]);
+    }
+  }
+  return parts.join(" و");
+}
+
+function groupWords(n, singular, dual, plural){
+  if(n === 0) return "";
+  if(n === 1) return singular;
+  if(n === 2) return dual;
+  if(n >= 3 && n <= 10) return threeDigitsToWords(n) + " " + plural;
+  return threeDigitsToWords(n) + " " + singular;
+}
+
+function numberToArabicWords(num){
+  num = Math.floor(Math.max(0, num));
+  if(num === 0) return "صفر";
+  const billion = Math.floor(num / 1000000000);
+  const million = Math.floor((num % 1000000000) / 1000000);
+  const thousand = Math.floor((num % 1000000) / 1000);
+  const rest = num % 1000;
+
+  const parts = [];
+  if(billion > 0) parts.push(groupWords(billion, "مليار", "ملياران", "مليارات"));
+  if(million > 0) parts.push(groupWords(million, "مليون", "مليونان", "ملايين"));
+  if(thousand > 0) parts.push(groupWords(thousand, "ألف", "ألفان", "آلاف"));
+  if(rest > 0) parts.push(threeDigitsToWords(rest));
+
+  return parts.filter(Boolean).join(" و");
+}
+
+function amountToArabicWords(amount){
+  const rounded = Math.round((Number(amount) || 0) * 100) / 100;
+  const pounds = Math.floor(rounded);
+  const piastres = Math.round((rounded - pounds) * 100);
+  let text = "";
+
+  if(pounds > 0){
+    let word;
+    if(pounds === 1) word = "جنيه مصري واحد";
+    else if(pounds === 2) word = "جنيهان مصريان";
+    else if(pounds <= 10) word = numberToArabicWords(pounds) + " جنيهات مصرية";
+    else word = numberToArabicWords(pounds) + " جنيهاً مصرياً";
+    text += word;
+  }
+
+  if(piastres > 0){
+    if(text) text += " و";
+    let word;
+    if(piastres === 1) word = "قرش واحد";
+    else if(piastres === 2) word = "قرشان";
+    else if(piastres <= 10) word = numberToArabicWords(piastres) + " قروش";
+    else word = numberToArabicWords(piastres) + " قرشاً";
+    text += word;
+  }
+
+  if(!text) text = "صفر جنيه";
+  return "فقط " + text + " لا غير";
 }
 
 function categoryOptionsHTML(selectedCode){
@@ -565,7 +756,7 @@ function categoryOptionsHTML(selectedCode){
    إدارة الأصناف
    ========================================================= */
 function addItem(){
-  items.push({ id: nextId++, code: "", name: "", price: 0, qty: 1 });
+  items.push({ id: nextId++, code: "", name: "", price: 0, qty: 1, notes: "" });
   renderItems();
   renderInvoice();
 }
@@ -604,6 +795,28 @@ function updatePrice(id, val){
   renderInvoice();
 }
 
+function updateNotes(id, val){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  item.notes = val;
+  renderInvoice();
+}
+
+function updateDiscount(val){
+  let pct = parseFloat(val);
+  if(isNaN(pct)) pct = 0;
+  pct = Math.min(100, Math.max(0, pct));
+  discountPercent = pct;
+  renderTotals();
+  renderInvoice();
+}
+
+function renderTotals(){
+  document.getElementById("subTotalDisplay").textContent = formatMoney(calculateSubtotal());
+  document.getElementById("discountAmountDisplay").textContent = formatMoney(calculateDiscountAmount());
+  document.getElementById("grandTotalDisplay").textContent = formatMoney(calculateTotal());
+}
+
 function updateRowTotal(id){
   const item = items.find(i => i.id === id);
   if(!item) return;
@@ -612,7 +825,7 @@ function updateRowTotal(id){
     const totalEl = card.querySelector(".item-total");
     if(totalEl) totalEl.textContent = formatMoney(calculateItemTotal(item));
   }
-  document.getElementById("grandTotalDisplay").textContent = formatMoney(calculateTotal());
+  renderTotals();
 }
 
 function clearInvoice(){
@@ -657,6 +870,10 @@ function itemCardHTML(item){
         <div class="item-total">${formatMoney(calculateItemTotal(item))}</div>
       </div>
     </div>
+    <div class="item-field item-notes-field">
+      <label>ملاحظات على الصنف</label>
+      <textarea oninput="updateNotes(${item.id}, this.value)" placeholder="ملاحظة خاصة بهذا الصنف (اختياري)...">${item.notes || ""}</textarea>
+    </div>
   </div>`;
 }
 
@@ -670,7 +887,7 @@ function renderItems(){
     emptyState.style.display = "none";
     container.innerHTML = items.map(itemCardHTML).join("");
   }
-  document.getElementById("grandTotalDisplay").textContent = formatMoney(calculateTotal());
+  renderTotals();
 }
 
 function renderInvoice(){
@@ -679,21 +896,29 @@ function renderInvoice(){
   document.getElementById("pDate").textContent = formatDate();
 
   const rows = items.filter(i => i.code);
-  const tbody = document.getElementById("pInvoiceRows");
+  const rowsWrap = document.getElementById("pInvoiceRows");
   if(rows.length === 0){
-    tbody.innerHTML = '<tr><td colspan="5" class="pv-empty">لا توجد أصناف مضافة بعد</td></tr>';
+    rowsWrap.innerHTML = '<tr><td class="pv-empty" colspan="7">لا توجد أصناف مضافة بعد</td></tr>';
   } else {
-    tbody.innerHTML = rows.map(i => `
+    rowsWrap.innerHTML = rows.map((i, idx) => `
       <tr>
+        <td>${idx + 1}</td>
         <td>${i.code}</td>
-        <td>${i.name}</td>
+        <td class="cell-name">${i.name}</td>
         <td>${i.qty}</td>
         <td>${formatMoney(i.price)}</td>
         <td>${formatMoney(calculateItemTotal(i))}</td>
+        <td class="cell-notes">${i.notes ? i.notes : "—"}</td>
       </tr>`).join("");
   }
 
-  document.getElementById("pGrandTotal").textContent = formatMoney(calculateTotal());
+  const subtotal = calculateSubtotal();
+  const discountAmount = calculateDiscountAmount();
+  const grandTotal = calculateTotal();
+  document.getElementById("pSubTotal").textContent = formatMoney(subtotal);
+  document.getElementById("pDiscountPercent").textContent = `${discountPercent}%`;
+  document.getElementById("pGrandTotal").textContent = formatMoney(grandTotal);
+  document.getElementById("pAmountWords").textContent = "المبلغ كتابةً: " + amountToArabicWords(grandTotal);
 
   const notes = document.getElementById("notesInput").value.trim();
   const notesBlock = document.getElementById("pNotesBlock");
@@ -713,24 +938,45 @@ function buildPdfOptions(filename){
     margin: 10,
     filename: filename,
     image: { type: "jpeg", quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
     jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
   };
 }
 
+async function waitForFonts(){
+  try{
+    if(document.fonts && document.fonts.ready){
+      await document.fonts.ready;
+    }
+  }catch(e){ /* ignore — proceed with whatever font is available */ }
+}
+
 async function saveFileToViewer(filename, blob){
   try{
-    const downloads = await claude.use("downloads");
-    if(!downloads){
-      alert("حفظ الملفات غير متاح في هذا العرض.");
-      return false;
+    if(typeof claude !== "undefined" && claude && typeof claude.use === "function"){
+      try{
+        const downloads = await claude.use("downloads");
+        if(downloads){
+          await downloads.save({ filename, data: blob });
+          return true;
+        }
+      }catch(claudeErr){
+        if(claudeErr && claudeErr.code === "declined"){
+          return false;
+        }
+        // Not running inside Claude's artifact runtime (or it failed) — fall back below.
+      }
     }
-    await downloads.save({ filename, data: blob });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
     return true;
   }catch(err){
-    if(err && err.code === "declined"){
-      return false;
-    }
     console.error("saveFileToViewer error:", err);
     alert("تعذّر حفظ الملف، حاول مرة أخرى.");
     return false;
@@ -746,6 +992,7 @@ async function exportPDF(){
   const filename = `فاتورة-الأصيل-${invoiceNumber}.pdf`;
   const opt = buildPdfOptions(filename);
   try{
+    await waitForFonts();
     const blob = await html2pdf().set(opt).from(element).outputPdf("blob");
     await saveFileToViewer(filename, blob);
   }catch(err){
@@ -764,6 +1011,7 @@ async function shareWhatsApp(){
   const opt = buildPdfOptions(filename);
 
   try{
+    await waitForFonts();
     const blob = await html2pdf().set(opt).from(element).outputPdf("blob");
     const file = new File([blob], filename, { type: "application/pdf" });
 
