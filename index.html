@@ -392,7 +392,7 @@
 
   <header class="app-head">
     <h1>الأصيل — نظام استخراج فاتورة على السريع</h1>
-    <p class="subtitle">قائمة الأصناف والأسعار — تعديل الكود والكمية والسعر ثم تصدير ومشاركة PDF</p>
+    <p class="subtitle">قائمة الأصناف والأسعار — تعديل الكود والكمية والسعر ثم تصدير PDF أو صورة ومشاركة الفاتورة</p>
   </header>
 
   <section class="card">
@@ -451,6 +451,7 @@
     <div class="actions-row">
       <button class="btn-clear" onclick="clearInvoice()">مسح الكل</button>
       <button class="btn-pdf" onclick="exportPDF()">📄 تصدير PDF</button>
+      <button class="btn-pdf" onclick="exportInvoiceImage()">🖼️ تصدير صورة</button>
       <button class="btn-whatsapp" onclick="shareWhatsApp()">🟢 إرسال إلى واتساب</button>
     </div>
   </section>
@@ -997,7 +998,7 @@ async function generateInvoicePDFBlob(filename){
   // نضعها داخل الصفحة بشكل طبيعي وبشفافية شبه كاملة، ثم نحذفها فورًا.
   clone.style.left = "0";
   clone.style.top = "0";
-  clone.style.opacity = "0.01";
+  clone.style.opacity = "1";
   clone.style.pointerEvents = "none";
   clone.style.zIndex = "2147483647";
   document.body.appendChild(clone);
@@ -1184,6 +1185,89 @@ async function saveFileToViewer(filename, blob){
     console.error("saveFileToViewer error:", err);
     alert("تعذّر حفظ ملف PDF، حاول مرة أخرى.");
     return false;
+  }
+}
+
+
+async function captureInvoiceCanvas(){
+  renderInvoice();
+  await waitForFonts();
+
+  const source = document.getElementById("invoicePreview");
+  if(!source) throw new Error("لم يتم العثور على معاينة الفاتورة");
+
+  const clone = source.cloneNode(true);
+  clone.id = "invoicePreviewImageTemp";
+  clone.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    "width:794px",
+    "max-width:none",
+    "background:#ffffff",
+    "color:#241f1a",
+    "padding:24px",
+    "margin:0",
+    "border:1px solid #e6ddca",
+    "border-radius:0",
+    "box-sizing:border-box",
+    "display:block",
+    "opacity:1",
+    "pointer-events:none",
+    "z-index:2147483647"
+  ].join(";");
+
+  document.body.appendChild(clone);
+
+  try{
+    if(!window.html2canvas) throw new Error("مكتبة html2canvas غير متاحة");
+
+    const canvas = await window.html2canvas(clone, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      windowWidth: 794,
+      windowHeight: Math.max(1000, clone.scrollHeight + 100),
+      scrollX: 0,
+      scrollY: 0
+    });
+
+    if(!canvas.width || !canvas.height) throw new Error("تعذر إنشاء صورة الفاتورة");
+
+    const dataUrl = canvas.toDataURL("image/png");
+    if(!dataUrl || dataUrl.length < 10000) throw new Error("تم إنشاء صورة فارغة");
+
+    return canvas;
+  }finally{
+    clone.remove();
+  }
+}
+
+async function exportInvoiceImage(){
+  if(items.filter(i => i.code).length === 0){
+    alert("أضف صنف واحد على الأقل قبل تصدير الصورة");
+    return;
+  }
+
+  const filename = `فاتورة-الأصيل-${invoiceNumber}.png`;
+
+  try{
+    const canvas = await captureInvoiceCanvas();
+    const dataUrl = canvas.toDataURL("image/png");
+
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    alert("تم تصدير الفاتورة كصورة PNG بنجاح.");
+  }catch(err){
+    console.error("exportInvoiceImage error:", err);
+    alert("تعذّر إنشاء صورة الفاتورة. افتح الصفحة من جديد وحاول مرة أخرى.");
   }
 }
 
