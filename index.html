@@ -1196,13 +1196,15 @@ async function captureInvoiceCanvas(){
   const source = document.getElementById("invoicePreview");
   if(!source) throw new Error("لم يتم العثور على معاينة الفاتورة");
 
+  // نضع نسخة التصوير داخل DOM بشكل مرئي فعلياً. لا نستخدم opacity أو z-index سالب.
   const clone = source.cloneNode(true);
-  clone.id = "invoicePreviewImageTemp";
+  clone.id = "invoicePreviewExportTemp";
   clone.style.cssText = [
-    "position:fixed",
+    "position:absolute",
     "left:0",
     "top:0",
     "width:794px",
+    "min-height:1123px",
     "max-width:none",
     "background:#ffffff",
     "color:#241f1a",
@@ -1212,35 +1214,39 @@ async function captureInvoiceCanvas(){
     "border-radius:0",
     "box-sizing:border-box",
     "display:block",
+    "visibility:visible",
     "opacity:1",
     "pointer-events:none",
-    "z-index:2147483647"
+    "z-index:999999"
   ].join(";");
 
   document.body.appendChild(clone);
+  const oldOverflow=document.body.style.overflow;
+  document.body.style.overflow="visible";
 
   try{
     if(!window.html2canvas) throw new Error("مكتبة html2canvas غير متاحة");
 
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     const canvas = await window.html2canvas(clone, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      windowWidth: 794,
-      windowHeight: Math.max(1000, clone.scrollHeight + 100),
-      scrollX: 0,
-      scrollY: 0
+      scale:2,
+      backgroundColor:"#ffffff",
+      useCORS:true,
+      allowTaint:true,
+      logging:false,
+      imageTimeout:15000,
+      width:794,
+      windowWidth:Math.max(document.documentElement.clientWidth, 794),
+      scrollX:0,
+      scrollY:0
     });
 
-    if(!canvas.width || !canvas.height) throw new Error("تعذر إنشاء صورة الفاتورة");
-
-    const dataUrl = canvas.toDataURL("image/png");
-    if(!dataUrl || dataUrl.length < 10000) throw new Error("تم إنشاء صورة فارغة");
+    if(!canvas.width || !canvas.height) throw new Error("تعذر إنشاء الصورة");
 
     return canvas;
   }finally{
+    document.body.style.overflow=oldOverflow;
     clone.remove();
   }
 }
@@ -1251,23 +1257,29 @@ async function exportInvoiceImage(){
     return;
   }
 
-  const filename = `فاتورة-الأصيل-${invoiceNumber}.png`;
+  const filename=`فاتورة-الأصيل-${invoiceNumber}.png`;
 
   try{
-    const canvas = await captureInvoiceCanvas();
-    const dataUrl = canvas.toDataURL("image/png");
+    const canvas=await captureInvoiceCanvas();
 
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    alert("تم تصدير الفاتورة كصورة PNG بنجاح.");
+    // PNG مباشر من الـCanvas بدون أي مكتبة PDF.
+    canvas.toBlob(function(blob){
+      if(!blob || blob.size < 1000){
+        alert("تعذر إنشاء صورة الفاتورة. حاول مرة أخرى.");
+        return;
+      }
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download=filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    },"image/png");
   }catch(err){
-    console.error("exportInvoiceImage error:", err);
-    alert("تعذّر إنشاء صورة الفاتورة. افتح الصفحة من جديد وحاول مرة أخرى.");
+    console.error("exportInvoiceImage error:",err);
+    alert("تعذر إنشاء صورة الفاتورة. حاول مرة أخرى.");
   }
 }
 
