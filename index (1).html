@@ -1037,7 +1037,7 @@ function exportInvoiceImage(){
     const styles = Array.from(document.querySelectorAll("style"))
       .map(s => s.textContent)
       .join("\n")
-      .replace(/<\\/style/gi, "<\\\\/style");
+      .replace(/<\/style/gi, "<\\/style");
 
     const foreignHTML = source.outerHTML
       .replace(/&/g, "&amp;")
