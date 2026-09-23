@@ -955,24 +955,15 @@ function preparePrintInvoice(){
   const source = document.getElementById("invoicePreview");
   if(!source) throw new Error("لم يتم العثور على معاينة الفاتورة");
 
-  const printFrame = document.createElement("iframe");
-  printFrame.id = "invoicePrintFrame";
-  printFrame.style.position = "fixed";
-  printFrame.style.right = "0";
-  printFrame.style.bottom = "0";
-  printFrame.style.width = "1px";
-  printFrame.style.height = "1px";
-  printFrame.style.border = "0";
-  printFrame.style.opacity = "0";
-  document.body.appendChild(printFrame);
+  const printWindow = window.open("", "_blank");
+  if(!printWindow) throw new Error("تم حظر نافذة الطباعة");
 
-  const doc = printFrame.contentDocument;
   const styles = Array.from(document.querySelectorAll("style"))
     .map(s => s.textContent)
     .join("\n");
 
-  doc.open();
-  doc.write(`<!doctype html><html lang="ar" dir="rtl"><head>
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html><html lang="ar" dir="rtl"><head>
     <meta charset="UTF-8">
     <title>${getInvoiceFileBaseName()}</title>
     <style>
@@ -1000,9 +991,9 @@ function preparePrintInvoice(){
   </head><body>
     <div class="invoice-print-wrap">${source.outerHTML}</div>
   </body></html>`);
-  doc.close();
+  printWindow.document.close();
 
-  return printFrame;
+  return printWindow;
 }
 
 async function exportPDF(){
@@ -1012,16 +1003,21 @@ async function exportPDF(){
   }
 
   try{
-    const frame = preparePrintInvoice();
-    await new Promise(r => setTimeout(r, 300));
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
+    const printWindow = preparePrintInvoice();
 
-    // نترك نافذة الطباعة مفتوحة للمستخدم؛ نحذف الـiframe بعد فترة.
-    setTimeout(() => frame.remove(), 5000);
+    await new Promise(resolve => {
+      if(printWindow.document.readyState === "complete") resolve();
+      else printWindow.addEventListener("load", resolve, {once:true});
+      setTimeout(resolve, 700);
+    });
+
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 150);
   }catch(err){
     console.error("exportPDF error:", err);
-    alert("تعذر فتح نافذة طباعة الفاتورة. حاول مرة أخرى.");
+    alert("تعذر فتح نافذة طباعة الفاتورة. إذا لم تظهر، اسمح بالنوافذ المنبثقة لهذا الموقع وحاول مرة أخرى.");
   }
 }
 
