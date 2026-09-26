@@ -376,6 +376,36 @@
   }
   .add-item-below button{ width:100%; }
 
+  /* Product picker & management */
+  .product-picker-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btn-secondary{background:#f3efe4;color:var(--navy);border:1px solid var(--border)}
+  .product-modal{position:fixed;inset:0;background:rgba(18,27,45,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:9999}
+  .product-modal.open{display:flex}
+  .product-modal-card{width:min(720px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
+  .product-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .product-modal-head h3{margin:0;color:var(--navy);font-size:18px}
+  .modal-close{background:var(--danger-bg);color:var(--danger);padding:7px 11px}
+  .product-picker-select{width:100%;min-height:230px;font-family:inherit;font-size:14px;border:1px solid var(--border);border-radius:10px;padding:6px;background:#fff}
+  .product-picker-help{margin:7px 0 12px;color:var(--muted-2);font-size:12.5px;font-weight:600}
+  .product-manage-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .product-manage-grid .field-full{grid-column:1/-1}
+  .product-manage-grid input,.product-manage-grid select{font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;width:100%}
+  .product-manage-grid input:focus,.product-manage-grid select:focus{outline:none;border-color:var(--orange)}
+  .item-card{position:relative}
+  .item-card[draggable="true"]{cursor:grab}
+  .item-card.dragging{opacity:.55}
+  .item-order-actions{display:flex;gap:5px;align-items:center}
+  .move-btn{width:30px;height:30px;padding:0;background:#f3efe4;color:var(--navy);border:1px solid var(--border);font-size:15px}
+  .item-name-input{font-family:inherit;font-size:14.5px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--ink);width:100%}
+  .item-name-input:focus{outline:none;border-color:var(--orange)}
+  .modal-divider{height:1px;background:var(--border);margin:18px 0}
+  @media (max-width:640px){
+    .product-modal{padding:8px}
+    .product-modal-card{padding:14px}
+    .product-manage-grid{grid-template-columns:1fr}
+    .product-manage-grid .field-full{grid-column:auto}
+  }
+
   @media (max-width: 640px){
     .client-grid{ grid-template-columns: 1fr; }
     .item-grid{ grid-template-columns: 1fr 1fr; }
@@ -426,7 +456,7 @@
     <div id="itemsContainer"></div>
 
     <div class="add-item-below">
-      <button class="btn-add" onclick="addItem()">+ إضافة صنف</button>
+      <button class="btn-add" onclick="addItem()">+ اختيار وإضافة الأصناف</button>
     </div>
 
     <div class="totals-block">
@@ -507,6 +537,57 @@
 
   <footer class="dev-credit">برمجة وتطوير محمد حسني احمد</footer>
 </div>
+
+  <div class="product-modal" id="productPickerModal" onclick="if(event.target===this) closeProductPicker()">
+    <div class="product-modal-card">
+      <div class="product-modal-head">
+        <h3>اختيار وإدارة الأصناف</h3>
+        <button class="modal-close" type="button" onclick="closeProductPicker()">إغلاق</button>
+      </div>
+
+      <div class="field">
+        <label>اختيار صنف أو أكثر</label>
+        <select id="multiProductPicker" class="product-picker-select" multiple></select>
+        <div class="product-picker-help">استخدم Ctrl / Command على الكمبيوتر، أو اضغط على أكثر من صنف في الهاتف لتحديد عدة أصناف، ثم اضغط «إضافة المحدد».</div>
+      </div>
+
+      <div class="product-picker-actions">
+        <button class="btn-add" type="button" onclick="addSelectedProducts()">إضافة المحدد</button>
+        <button class="btn-secondary" type="button" onclick="prepareNewProduct()">+ إضافة صنف جديد</button>
+        <button class="btn-secondary" type="button" onclick="prepareEditProduct()">✏️ تعديل الصنف المحدد</button>
+      </div>
+
+      <div class="modal-divider"></div>
+
+      <div id="productManageArea" style="display:none;">
+        <div class="product-modal-head">
+          <h3 id="productManageTitle">إضافة صنف جديد</h3>
+        </div>
+        <div class="product-manage-grid">
+          <div class="field">
+            <label>كود الصنف</label>
+            <input type="text" id="manageProductCode" placeholder="مثال: 9-20">
+          </div>
+          <div class="field">
+            <label>اسم الصنف</label>
+            <input type="text" id="manageProductName" placeholder="اسم الصنف">
+          </div>
+          <div class="field">
+            <label>السعر</label>
+            <input type="number" id="manageProductPrice" min="0" step="0.01" placeholder="السعر">
+          </div>
+          <div class="field">
+            <label>التصنيف</label>
+            <input type="text" id="manageProductCategory" placeholder="مثال: USB">
+          </div>
+        </div>
+        <div class="product-picker-actions">
+          <button class="btn-add" type="button" onclick="saveManagedProduct()">حفظ الصنف</button>
+          <button class="btn-secondary" type="button" onclick="cancelProductManagement()">إلغاء</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <script>
 /* =========================================================
@@ -750,27 +831,196 @@ function amountToArabicWords(amount){
 }
 
 function categoryOptionsHTML(selectedCode){
+  return productOptionsHTML(selectedCode, false);
+}
+
+/* =========================================================
+   اختيار متعدد + إدارة كتالوج الأصناف
+   ========================================================= */
+let PRODUCT_OVERRIDES = {};
+let CUSTOM_PRODUCTS = [];
+
+function getProducts(){
+  const base = PRODUCTS.map(p => {
+    const override = PRODUCT_OVERRIDES[p.code] || {};
+    return {...p, ...override};
+  });
+  return base.concat(CUSTOM_PRODUCTS.map(p => ({...p})));
+}
+
+function productStorageKey(){
+  return "asil_invoice_product_catalog_v1";
+}
+
+function loadProductCatalog(){
+  try{
+    const raw = localStorage.getItem(productStorageKey());
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    PRODUCT_OVERRIDES = saved.overrides || {};
+    CUSTOM_PRODUCTS = Array.isArray(saved.custom) ? saved.custom : [];
+  }catch(err){
+    console.warn("تعذر تحميل كتالوج الأصناف المحفوظ:", err);
+    PRODUCT_OVERRIDES = {};
+    CUSTOM_PRODUCTS = [];
+  }
+}
+
+function saveProductCatalog(){
+  try{
+    localStorage.setItem(productStorageKey(), JSON.stringify({
+      overrides: PRODUCT_OVERRIDES,
+      custom: CUSTOM_PRODUCTS
+    }));
+  }catch(err){
+    console.warn("تعذر حفظ كتالوج الأصناف:", err);
+  }
+}
+
+function escapeHtml(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function productOptionsHTML(selectedCode="", multiple=false){
+  const products = getProducts();
   const cats = {};
-  PRODUCTS.forEach(p => {
+  products.forEach(p => {
     if(!cats[p.category]) cats[p.category] = [];
     cats[p.category].push(p);
   });
   return Object.keys(cats).map(cat => {
     const opts = cats[cat].map(p => {
-      const sel = p.code === selectedCode ? "selected" : "";
-      return `<option value="${p.code}" ${sel}>${p.code} — ${p.name} — ${formatMoney(p.price)}</option>`;
+      const selected = multiple
+        ? ""
+        : (p.code === selectedCode ? " selected" : "");
+      return '<option value="' + escapeHtml(p.code) + '"' + selected + '>' +
+        escapeHtml(p.code) + ' — ' + escapeHtml(p.name) + ' — ' + escapeHtml(formatMoney(p.price)) +
+        '</option>';
     }).join("");
-    return `<optgroup label="${cat}">${opts}</optgroup>`;
+    return '<optgroup label="' + escapeHtml(cat) + '">' + opts + '</optgroup>';
   }).join("");
+}
+
+function populateProductPicker(){
+  const picker = document.getElementById("multiProductPicker");
+  if(!picker) return;
+  picker.innerHTML = productOptionsHTML("", true);
+}
+
+function openProductPicker(){
+  populateProductPicker();
+  document.getElementById("productManageArea").style.display = "none";
+  document.getElementById("productPickerModal").classList.add("open");
+}
+
+function closeProductPicker(){
+  document.getElementById("productPickerModal").classList.remove("open");
+}
+
+function addSelectedProducts(){
+  const picker = document.getElementById("multiProductPicker");
+  const codes = Array.from(picker.selectedOptions).map(o => o.value).filter(Boolean);
+  if(codes.length === 0){
+    alert("اختر صنفًا واحدًا على الأقل.");
+    return;
+  }
+
+  const products = getProducts();
+  codes.forEach(code => {
+    const product = products.find(p => p.code === code);
+    if(!product) return;
+    items.push({
+      id: nextId++,
+      code: product.code,
+      name: product.name,
+      price: product.price,
+      qty: 1,
+      notes: ""
+    });
+  });
+
+  renderItems();
+  renderInvoice();
+  closeProductPicker();
+}
+
+function prepareNewProduct(){
+  document.getElementById("productManageArea").style.display = "block";
+  document.getElementById("productManageTitle").textContent = "إضافة صنف جديد";
+  const fields = ["manageProductCode","manageProductName","manageProductPrice","manageProductCategory"];
+  fields.forEach(id => document.getElementById(id).value = "");
+  document.getElementById("manageProductCode").disabled = false;
+  document.getElementById("manageProductCode").focus();
+}
+
+function prepareEditProduct(){
+  const picker = document.getElementById("multiProductPicker");
+  const code = picker && picker.selectedOptions.length ? picker.selectedOptions[0].value : "";
+  if(!code){
+    alert("حدد صنفًا واحدًا من القائمة أولًا للتعديل.");
+    return;
+  }
+
+  const product = getProducts().find(p => p.code === code);
+  if(!product) return;
+
+  document.getElementById("productManageArea").style.display = "block";
+  document.getElementById("productManageTitle").textContent = "تعديل الصنف";
+  document.getElementById("manageProductCode").value = product.code;
+  document.getElementById("manageProductCode").disabled = true;
+  document.getElementById("manageProductName").value = product.name;
+  document.getElementById("manageProductPrice").value = product.price;
+  document.getElementById("manageProductCategory").value = product.category;
+}
+
+function saveManagedProduct(){
+  const code = document.getElementById("manageProductCode").value.trim();
+  const name = document.getElementById("manageProductName").value.trim();
+  const price = Math.max(0, parseFloat(document.getElementById("manageProductPrice").value) || 0);
+  const category = document.getElementById("manageProductCategory").value.trim() || "أصناف أخرى";
+
+  if(!code || !name){
+    alert("اكتب كود الصنف واسم الصنف.");
+    return;
+  }
+
+  const customIndex = CUSTOM_PRODUCTS.findIndex(p => p.code === code);
+  const defaultProduct = PRODUCTS.find(p => p.code === code);
+
+  if(customIndex >= 0){
+    CUSTOM_PRODUCTS[customIndex] = {code, name, price, category};
+  }else if(defaultProduct){
+    PRODUCT_OVERRIDES[code] = {name, price, category};
+  }else{
+    if(getProducts().some(p => p.code === code)){
+      alert("كود الصنف موجود بالفعل.");
+      return;
+    }
+    CUSTOM_PRODUCTS.push({code, name, price, category});
+  }
+
+  saveProductCatalog();
+  populateProductPicker();
+  renderItems();
+  renderInvoice();
+  cancelProductManagement();
+  alert("تم حفظ بيانات الصنف.");
+}
+
+function cancelProductManagement(){
+  document.getElementById("productManageArea").style.display = "none";
 }
 
 /* =========================================================
    إدارة الأصناف
    ========================================================= */
 function addItem(){
-  items.push({ id: nextId++, code: "", name: "", price: 0, qty: 1, notes: "" });
-  renderItems();
-  renderInvoice();
+  openProductPicker();
 }
 
 function removeItem(id){
@@ -781,7 +1031,7 @@ function removeItem(id){
 
 function selectProduct(id, code){
   const item = items.find(i => i.id === id);
-  const product = PRODUCTS.find(p => p.code === code);
+  const product = getProducts().find(p => p.code === code);
   if(!item || !product) return;
   item.code = product.code;
   item.name = product.name;
@@ -789,6 +1039,54 @@ function selectProduct(id, code){
   item.qty = 1;
   renderItems();
   renderInvoice();
+}
+
+function updateName(id, val){
+  const item = items.find(i => i.id === id);
+  if(!item) return;
+  item.name = val;
+  renderInvoice();
+}
+
+function moveItem(id, direction){
+  const index = items.findIndex(i => i.id === id);
+  const target = index + direction;
+  if(index < 0 || target < 0 || target >= items.length) return;
+  const temp = items[index];
+  items[index] = items[target];
+  items[target] = temp;
+  renderItems();
+  renderInvoice();
+}
+
+let draggedItemId = null;
+function startItemDrag(event, id){
+  draggedItemId = id;
+  event.currentTarget.classList.add("dragging");
+  if(event.dataTransfer){
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(id));
+  }
+}
+function allowItemDrop(event){
+  event.preventDefault();
+  if(event.dataTransfer) event.dataTransfer.dropEffect = "move";
+}
+function dropItem(event, targetId){
+  event.preventDefault();
+  const sourceId = draggedItemId || Number(event.dataTransfer?.getData("text/plain"));
+  if(!sourceId || sourceId === targetId) return;
+  const from = items.findIndex(i => i.id === sourceId);
+  const to = items.findIndex(i => i.id === targetId);
+  if(from < 0 || to < 0) return;
+  const [moved] = items.splice(from,1);
+  items.splice(to,0,moved);
+  renderItems();
+  renderInvoice();
+}
+function endItemDrag(event){
+  draggedItemId = null;
+  event.currentTarget.classList.remove("dragging");
 }
 
 function updateQty(id, val){
@@ -855,10 +1153,18 @@ function clearInvoice(){
 function itemCardHTML(item){
   const dup = isDuplicate(item);
   return `
-  <div class="item-card ${dup ? "dup" : ""}" data-id="${item.id}">
+  <div class="item-card ${dup ? "dup" : ""}" data-id="${item.id}" draggable="true"
+       ondragstart="startItemDrag(event, ${item.id})"
+       ondragover="allowItemDrop(event)"
+       ondrop="dropItem(event, ${item.id})"
+       ondragend="endItemDrag(event)">
     <div class="item-card-head">
       <span class="item-code-badge">${item.code || "—"}</span>
-      <button class="del-btn" onclick="removeItem(${item.id})" aria-label="حذف الصنف">×</button>
+      <div class="item-order-actions">
+        <button class="move-btn" type="button" onclick="moveItem(${item.id}, -1)" title="تحريك لأعلى">↑</button>
+        <button class="move-btn" type="button" onclick="moveItem(${item.id}, 1)" title="تحريك لأسفل">↓</button>
+        <button class="del-btn" type="button" onclick="removeItem(${item.id})" aria-label="حذف الصنف">×</button>
+      </div>
     </div>
     <div class="item-field">
       <label>اختيار الصنف</label>
@@ -867,6 +1173,11 @@ function itemCardHTML(item){
         ${categoryOptionsHTML(item.code)}
       </select>
       ${dup ? '<div class="dup-warning">⚠️ هذا الصنف مضاف بالفعل</div>' : ""}
+    </div>
+    <div class="item-field">
+      <label>اسم الصنف في الفاتورة</label>
+      <input class="item-name-input" type="text" value="${escapeHtml(item.name)}"
+             oninput="updateName(${item.id}, this.value)" placeholder="اسم الصنف">
     </div>
     <div class="item-grid">
       <div class="item-field">
@@ -884,7 +1195,7 @@ function itemCardHTML(item){
     </div>
     <div class="item-field item-notes-field">
       <label>ملاحظات على الصنف</label>
-      <textarea oninput="updateNotes(${item.id}, this.value)" placeholder="ملاحظة خاصة بهذا الصنف (اختياري)...">${item.notes || ""}</textarea>
+      <textarea oninput="updateNotes(${item.id}, this.value)" placeholder="ملاحظة خاصة بهذا الصنف (اختياري)...">${escapeHtml(item.notes)}</textarea>
     </div>
   </div>`;
 }
@@ -1188,6 +1499,7 @@ async function shareWhatsApp(){
    بدء التشغيل
    ========================================================= */
 function init(){
+  loadProductCatalog();
   generateInvoiceNumber();
   document.getElementById("invoiceNoDisplay").textContent = invoiceNumber;
   document.getElementById("dateDisplay").textContent = formatDate();
