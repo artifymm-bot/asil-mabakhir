@@ -416,6 +416,11 @@
     table.inv-table thead th, table.inv-table tbody td{ padding: 6px 4px; }
   }
 </style>
+<style>
+.selected-product-image{margin:8px 0 4px;text-align:center}
+.product-image-wrap{display:inline-flex;align-items:center;justify-content:center;width:90px;height:90px;border:1px solid #ddd;border-radius:12px;background:#fff;overflow:hidden}
+.product-image{width:100%;height:100%;object-fit:contain;display:block}
+</style>
 </head>
 <body>
 
@@ -966,6 +971,18 @@ function escapeHtml(value){
     .replace(/"/g,"&quot;")
     .replace(/'/g,"&#039;");
 }
+function getProductByCode(code){
+  return getProducts().find(p => p.code === code) || null;
+}
+
+function productImageHTML(product){
+  if(!product || !product.image_url) return "";
+  return '<div class="product-image-wrap"><img class="product-image" src="' +
+    escapeHtml(product.image_url) +
+    '" alt="' + escapeHtml(product.name || product.code) +
+    '" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>';
+}
+
 
 function productOptionsHTML(selectedCode="", multiple=false){
   const products = getProducts();
@@ -1269,6 +1286,7 @@ function itemCardHTML(item){
       </select>
       ${dup ? '<div class="dup-warning">⚠️ هذا الصنف مضاف بالفعل</div>' : ""}
     </div>
+    <div class="selected-product-image">\${productImageHTML(getProductByCode(item.code))}</div>
     <div class="item-field">
       <label>اسم الصنف في الفاتورة</label>
       <input class="item-name-input" type="text" value="${escapeHtml(item.name)}"
