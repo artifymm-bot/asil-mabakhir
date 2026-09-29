@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --navy:#1c2b4a;
@@ -687,6 +688,15 @@ const PRODUCTS = [
 ];
 
 /* =========================================================
+   Supabase
+   ========================================================= */
+const SUPABASE_URL = "https://shojdoigxhoybwtpkvam.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_M8ayaSDZOZ3MIrbHqyD-0Q_mY6kHSPP";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let DB_PRODUCTS = [];
+let productsLoadedFromSupabase = false;
+
+/* =========================================================
    الحالة العامة
    ========================================================= */
 let items = [];
@@ -840,12 +850,83 @@ function categoryOptionsHTML(selectedCode){
 let PRODUCT_OVERRIDES = {};
 let CUSTOM_PRODUCTS = [];
 
+function inferCategory(code){
+  const prefix = String(code || "").split("-")[0];
+  if(prefix === "8" || prefix === "1") return "مباخر الفحم والكهرباء";
+  if(prefix === "9" || prefix === "2" || prefix === "117" || prefix === "T" || prefix === "FT") return "USB والأجهزة والفواحات";
+  if(prefix === "7" || prefix === "10") return "فريسكا";
+  return "أصناف أخرى";
+}
+
 function getProducts(){
+  if(productsLoadedFromSupabase){
+    return DB_PRODUCTS.map(p => ({
+      code: p.code,
+      name: p.name,
+      price: Number(p.price) || 0,
+      category: inferCategory(p.code),
+      image_url: p.image_url || ""
+    }));
+  }
   const base = PRODUCTS.map(p => {
     const override = PRODUCT_OVERRIDES[p.code] || {};
     return {...p, ...override};
   });
   return base.concat(CUSTOM_PRODUCTS.map(p => ({...p})));
+}
+
+async function loadProductsFromSupabase(){
+  const { data, error } = await supabaseClient
+    .from("products")
+    .select("code,name,price,image_url")
+    .order("code", { ascending: true });
+
+  if(error){
+    console.error("Supabase products error:", error);
+    productsLoadedFromSupabase = false;
+    return false;
+  }
+
+  DB_PRODUCTS = Array.isArray(data) ? data : [];
+  productsLoadedFromSupabase = true;
+  populateProductPicker();
+  renderItems();
+  renderInvoice();
+  return true;
+}
+
+async function saveProductToSupabase(product){
+  const payload = {
+    code: String(product.code || "").trim(),
+    name: String(product.name || "").trim(),
+    price: Number(product.price) || 0
+  };
+
+  const { data, error } = await supabaseClient
+    .from("products")
+    .upsert(payload, { onConflict: "code" })
+    .select("code,name,price,image_url")
+    .single();
+
+  if(error){
+    console.error("Supabase save product error:", error);
+    throw error;
+  }
+
+  const index = DB_PRODUCTS.findIndex(p => p.code === data.code);
+  if(index >= 0) DB_PRODUCTS[index] = data;
+  else DB_PRODUCTS.push(data);
+  productsLoadedFromSupabase = true;
+  return data;
+}
+
+async function deleteProductFromSupabase(code){
+  const { error } = await supabaseClient
+    .from("products")
+    .delete()
+    .eq("code", code);
+  if(error) throw error;
+  DB_PRODUCTS = DB_PRODUCTS.filter(p => p.code !== code);
 }
 
 function productStorageKey(){
@@ -1498,8 +1579,9 @@ async function shareWhatsApp(){
 /* =========================================================
    بدء التشغيل
    ========================================================= */
-function init(){
+async function init(){
   loadProductCatalog();
+  await loadProductsFromSupabase();
   generateInvoiceNumber();
   document.getElementById("invoiceNoDisplay").textContent = invoiceNumber;
   document.getElementById("dateDisplay").textContent = formatDate();
