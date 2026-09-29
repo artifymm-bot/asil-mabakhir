@@ -1059,7 +1059,7 @@ function prepareEditProduct(){
   document.getElementById("manageProductCategory").value = product.category;
 }
 
-function saveManagedProduct(){
+async function saveManagedProduct(){
   const code = document.getElementById("manageProductCode").value.trim();
   const name = document.getElementById("manageProductName").value.trim();
   const price = Math.max(0, parseFloat(document.getElementById("manageProductPrice").value) || 0);
@@ -1070,27 +1070,41 @@ function saveManagedProduct(){
     return;
   }
 
-  const customIndex = CUSTOM_PRODUCTS.findIndex(p => p.code === code);
-  const defaultProduct = PRODUCTS.find(p => p.code === code);
+  try{
+    if(productsLoadedFromSupabase){
+      const existing = DB_PRODUCTS.find(p => p.code === code);
+      if(!existing && getProducts().some(p => p.code === code)){
+        alert("كود الصنف موجود بالفعل.");
+        return;
+      }
+      await saveProductToSupabase({code, name, price, category});
+    }else{
+      const customIndex = CUSTOM_PRODUCTS.findIndex(p => p.code === code);
+      const defaultProduct = PRODUCTS.find(p => p.code === code);
 
-  if(customIndex >= 0){
-    CUSTOM_PRODUCTS[customIndex] = {code, name, price, category};
-  }else if(defaultProduct){
-    PRODUCT_OVERRIDES[code] = {name, price, category};
-  }else{
-    if(getProducts().some(p => p.code === code)){
-      alert("كود الصنف موجود بالفعل.");
-      return;
+      if(customIndex >= 0){
+        CUSTOM_PRODUCTS[customIndex] = {code, name, price, category};
+      }else if(defaultProduct){
+        PRODUCT_OVERRIDES[code] = {name, price, category};
+      }else{
+        if(getProducts().some(p => p.code === code)){
+          alert("كود الصنف موجود بالفعل.");
+          return;
+        }
+        CUSTOM_PRODUCTS.push({code, name, price, category});
+      }
+      saveProductCatalog();
     }
-    CUSTOM_PRODUCTS.push({code, name, price, category});
-  }
 
-  saveProductCatalog();
-  populateProductPicker();
-  renderItems();
-  renderInvoice();
-  cancelProductManagement();
-  alert("تم حفظ بيانات الصنف.");
+    populateProductPicker();
+    renderItems();
+    renderInvoice();
+    cancelProductManagement();
+    alert("تم حفظ بيانات الصنف.");
+  }catch(err){
+    console.error("saveManagedProduct error:", err);
+    alert("تعذر حفظ الصنف في قاعدة البيانات. حالياً صلاحية القراءة مفعلة، وسنفعّل إدارة الأصناف الآمنة بعد إضافة تسجيل الدخول.");
+  }
 }
 
 function cancelProductManagement(){
