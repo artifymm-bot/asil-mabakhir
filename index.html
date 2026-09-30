@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --navy:#1c2b4a;
@@ -385,8 +386,27 @@
   .product-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
   .product-modal-head h3{margin:0;color:var(--navy);font-size:18px}
   .modal-close{background:var(--danger-bg);color:var(--danger);padding:7px 11px}
-  .product-picker-select{width:100%;min-height:230px;font-family:inherit;font-size:14px;border:1px solid var(--border);border-radius:10px;padding:6px;background:#fff}
+  .product-picker-select{display:none}
   .product-picker-help{margin:7px 0 12px;color:var(--muted-2);font-size:12.5px;font-weight:600}
+  .product-picker-search{font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;width:100%;margin-bottom:10px}
+  .product-picker-search:focus{outline:none;border-color:var(--orange)}
+  .product-picker-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-height:52vh;overflow:auto;padding:2px}
+  .product-picker-card{position:relative;border:1.5px solid var(--border);border-radius:12px;background:#fff;padding:9px;text-align:right;cursor:pointer;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+  .product-picker-card:hover{transform:translateY(-1px)}
+  .product-picker-card.selected{border-color:var(--orange);box-shadow:0 0 0 2px rgba(201,130,47,.14);background:#fffaf3}
+  .product-picker-check{position:absolute;top:7px;left:7px;width:23px;height:23px;border-radius:50%;background:#eee;color:#777;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
+  .product-picker-card.selected .product-picker-check{background:var(--orange);color:#fff}
+  .product-picker-img{width:100%;height:125px;border-radius:9px;background:#f7f7f7;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:8px}
+  .product-picker-img .product-image-wrap{width:100%;height:100%;border:0;border-radius:0;background:transparent}
+  .product-picker-img .product-image{object-fit:contain}
+  .product-picker-no-image{font-size:28px;color:#aaa}
+  .product-picker-code{display:inline-block;background:var(--navy);color:#fff;border-radius:6px;padding:2px 7px;font-size:11px;font-weight:800;margin-bottom:4px}
+  .product-picker-name{font-size:13px;font-weight:800;color:var(--ink);line-height:1.45;min-height:38px}
+  .product-picker-price{font-size:13px;font-weight:800;color:var(--orange);margin-top:4px}
+  .product-picker-category{font-size:10.5px;color:var(--muted-2);margin-top:2px}
+  .product-picker-empty{text-align:center;color:var(--muted-2);padding:25px;font-weight:700;grid-column:1/-1}
+  @media (max-width:760px){.product-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));max-height:55vh}.product-picker-img{height:120px}}
+  @media (max-width:430px){.product-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.product-picker-card{padding:7px}.product-picker-img{height:105px}.product-picker-name{font-size:12px}.product-picker-price{font-size:12px}}
   .product-manage-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .product-manage-grid .field-full{grid-column:1/-1}
   .product-manage-grid input,.product-manage-grid select{font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:#fff;width:100%}
@@ -414,6 +434,11 @@
     table.inv-table{ font-size: 11px; }
     table.inv-table thead th, table.inv-table tbody td{ padding: 6px 4px; }
   }
+</style>
+<style>
+.selected-product-image{margin:8px 0 4px;text-align:center}
+.product-image-wrap{display:inline-flex;align-items:center;justify-content:center;width:90px;height:90px;border:1px solid #ddd;border-radius:12px;background:#fff;overflow:hidden}
+.product-image{width:100%;height:100%;object-fit:contain;display:block}
 </style>
 </head>
 <body>
@@ -547,8 +572,10 @@
 
       <div class="field">
         <label>اختيار صنف أو أكثر</label>
+        <input id="productPickerSearch" class="product-picker-search" type="search" placeholder="🔎 ابحث بالكود أو اسم الصنف..." oninput="filterProductPicker(this.value)">
         <select id="multiProductPicker" class="product-picker-select" multiple></select>
-        <div class="product-picker-help">استخدم Ctrl / Command على الكمبيوتر، أو اضغط على أكثر من صنف في الهاتف لتحديد عدة أصناف، ثم اضغط «إضافة المحدد».</div>
+        <div id="productPickerGrid" class="product-picker-grid"></div>
+        <div class="product-picker-help">اضغط على أي صنف لتحديده. يمكنك تحديد أكثر من صنف ثم اضغط «إضافة المحدد».</div>
       </div>
 
       <div class="product-picker-actions">
@@ -685,6 +712,15 @@ const PRODUCTS = [
   {code:"7-3", name:"مشكل الوان", price:20, category:"فريسكا"},
   {code:"10-1", name:"فريسكا الوان AROMA THERAPIE", price:20, category:"فريسكا"},
 ];
+
+/* =========================================================
+   Supabase
+   ========================================================= */
+const SUPABASE_URL = "https://shojdoigxhoybwtpkvam.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_M8ayaSDZOZ3MIrbHqyD-0Q_mY6kHSPP";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let DB_PRODUCTS = [];
+let productsLoadedFromSupabase = false;
 
 /* =========================================================
    الحالة العامة
@@ -840,12 +876,83 @@ function categoryOptionsHTML(selectedCode){
 let PRODUCT_OVERRIDES = {};
 let CUSTOM_PRODUCTS = [];
 
+function inferCategory(code){
+  const prefix = String(code || "").split("-")[0];
+  if(prefix === "8" || prefix === "1") return "مباخر الفحم والكهرباء";
+  if(prefix === "9" || prefix === "2" || prefix === "117" || prefix === "T" || prefix === "FT") return "USB والأجهزة والفواحات";
+  if(prefix === "7" || prefix === "10") return "فريسكا";
+  return "أصناف أخرى";
+}
+
 function getProducts(){
+  if(productsLoadedFromSupabase){
+    return DB_PRODUCTS.map(p => ({
+      code: p.code,
+      name: p.name,
+      price: Number(p.price) || 0,
+      category: inferCategory(p.code),
+      image_url: p.image_url || ""
+    }));
+  }
   const base = PRODUCTS.map(p => {
     const override = PRODUCT_OVERRIDES[p.code] || {};
     return {...p, ...override};
   });
   return base.concat(CUSTOM_PRODUCTS.map(p => ({...p})));
+}
+
+async function loadProductsFromSupabase(){
+  const { data, error } = await supabaseClient
+    .from("products")
+    .select("code,name,price,image_url")
+    .order("code", { ascending: true });
+
+  if(error){
+    console.error("Supabase products error:", error);
+    productsLoadedFromSupabase = false;
+    return false;
+  }
+
+  DB_PRODUCTS = Array.isArray(data) ? data : [];
+  productsLoadedFromSupabase = true;
+  populateProductPicker();
+  renderItems();
+  renderInvoice();
+  return true;
+}
+
+async function saveProductToSupabase(product){
+  const payload = {
+    code: String(product.code || "").trim(),
+    name: String(product.name || "").trim(),
+    price: Number(product.price) || 0
+  };
+
+  const { data, error } = await supabaseClient
+    .from("products")
+    .upsert(payload, { onConflict: "code" })
+    .select("code,name,price,image_url")
+    .single();
+
+  if(error){
+    console.error("Supabase save product error:", error);
+    throw error;
+  }
+
+  const index = DB_PRODUCTS.findIndex(p => p.code === data.code);
+  if(index >= 0) DB_PRODUCTS[index] = data;
+  else DB_PRODUCTS.push(data);
+  productsLoadedFromSupabase = true;
+  return data;
+}
+
+async function deleteProductFromSupabase(code){
+  const { error } = await supabaseClient
+    .from("products")
+    .delete()
+    .eq("code", code);
+  if(error) throw error;
+  DB_PRODUCTS = DB_PRODUCTS.filter(p => p.code !== code);
 }
 
 function productStorageKey(){
@@ -885,6 +992,18 @@ function escapeHtml(value){
     .replace(/"/g,"&quot;")
     .replace(/'/g,"&#039;");
 }
+function getProductByCode(code){
+  return getProducts().find(p => p.code === code) || null;
+}
+
+function productImageHTML(product){
+  if(!product || !product.image_url) return "";
+  return '<div class="product-image-wrap"><img class="product-image" src="' +
+    escapeHtml(product.image_url) +
+    '" alt="' + escapeHtml(product.name || product.code) +
+    '" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>';
+}
+
 
 function productOptionsHTML(selectedCode="", multiple=false){
   const products = getProducts();
@@ -906,10 +1025,68 @@ function productOptionsHTML(selectedCode="", multiple=false){
   }).join("");
 }
 
+let selectedProductCodes = new Set();
+
 function populateProductPicker(){
   const picker = document.getElementById("multiProductPicker");
   if(!picker) return;
+  selectedProductCodes = new Set();
   picker.innerHTML = productOptionsHTML("", true);
+  const search = document.getElementById("productPickerSearch");
+  if(search) search.value = "";
+  renderProductPickerCards("");
+}
+
+function productPickerCardHTML(product){
+  const selected = selectedProductCodes.has(product.code);
+  const image = product.image_url
+    ? '<img class="product-image" src="' + escapeHtml(product.image_url) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+    : '<div class="product-picker-no-image">📦</div>';
+  const category = product.category || "أصناف أخرى";
+  return `
+    <div class="product-picker-card ${selected ? "selected" : ""}" data-code="${escapeHtml(product.code)}" onclick="toggleProductPickerCard('${escapeHtml(product.code)}')">
+      <div class="product-picker-check">${selected ? "✓" : "+"}</div>
+      <div class="product-picker-img"><div class="product-image-wrap">${image}</div></div>
+      <div class="product-picker-code">${escapeHtml(product.code)}</div>
+      <div class="product-picker-name">${escapeHtml(product.name)}</div>
+      <div class="product-picker-price">${formatMoney(product.price)}</div>
+      <div class="product-picker-category">${escapeHtml(category)}</div>
+    </div>`;
+}
+
+function renderProductPickerCards(query){
+  const grid = document.getElementById("productPickerGrid");
+  if(!grid) return;
+  const q = String(query || "").trim().toLowerCase();
+  const products = getProducts().filter(p => {
+    if(!q) return true;
+    return String(p.code || "").toLowerCase().includes(q) ||
+           String(p.name || "").toLowerCase().includes(q) ||
+           String(p.category || "").toLowerCase().includes(q);
+  });
+  if(products.length === 0){
+    grid.innerHTML = '<div class="product-picker-empty">لا توجد أصناف مطابقة للبحث.</div>';
+    return;
+  }
+  grid.innerHTML = products.map(productPickerCardHTML).join("");
+}
+
+function toggleProductPickerCard(code){
+  if(selectedProductCodes.has(code)) selectedProductCodes.delete(code);
+  else selectedProductCodes.add(code);
+
+  const picker = document.getElementById("multiProductPicker");
+  if(picker){
+    Array.from(picker.options).forEach(option => {
+      option.selected = selectedProductCodes.has(option.value);
+    });
+  }
+  const search = document.getElementById("productPickerSearch");
+  renderProductPickerCards(search ? search.value : "");
+}
+
+function filterProductPicker(query){
+  renderProductPickerCards(query);
 }
 
 function openProductPicker(){
@@ -924,7 +1101,10 @@ function closeProductPicker(){
 
 function addSelectedProducts(){
   const picker = document.getElementById("multiProductPicker");
-  const codes = Array.from(picker.selectedOptions).map(o => o.value).filter(Boolean);
+  const codes = Array.from(selectedProductCodes);
+  if(codes.length === 0 && picker){
+    codes.push(...Array.from(picker.selectedOptions).map(o => o.value).filter(Boolean));
+  }
   if(codes.length === 0){
     alert("اختر صنفًا واحدًا على الأقل.");
     return;
@@ -978,7 +1158,7 @@ function prepareEditProduct(){
   document.getElementById("manageProductCategory").value = product.category;
 }
 
-function saveManagedProduct(){
+async function saveManagedProduct(){
   const code = document.getElementById("manageProductCode").value.trim();
   const name = document.getElementById("manageProductName").value.trim();
   const price = Math.max(0, parseFloat(document.getElementById("manageProductPrice").value) || 0);
@@ -989,27 +1169,41 @@ function saveManagedProduct(){
     return;
   }
 
-  const customIndex = CUSTOM_PRODUCTS.findIndex(p => p.code === code);
-  const defaultProduct = PRODUCTS.find(p => p.code === code);
+  try{
+    if(productsLoadedFromSupabase){
+      const existing = DB_PRODUCTS.find(p => p.code === code);
+      if(!existing && getProducts().some(p => p.code === code)){
+        alert("كود الصنف موجود بالفعل.");
+        return;
+      }
+      await saveProductToSupabase({code, name, price, category});
+    }else{
+      const customIndex = CUSTOM_PRODUCTS.findIndex(p => p.code === code);
+      const defaultProduct = PRODUCTS.find(p => p.code === code);
 
-  if(customIndex >= 0){
-    CUSTOM_PRODUCTS[customIndex] = {code, name, price, category};
-  }else if(defaultProduct){
-    PRODUCT_OVERRIDES[code] = {name, price, category};
-  }else{
-    if(getProducts().some(p => p.code === code)){
-      alert("كود الصنف موجود بالفعل.");
-      return;
+      if(customIndex >= 0){
+        CUSTOM_PRODUCTS[customIndex] = {code, name, price, category};
+      }else if(defaultProduct){
+        PRODUCT_OVERRIDES[code] = {name, price, category};
+      }else{
+        if(getProducts().some(p => p.code === code)){
+          alert("كود الصنف موجود بالفعل.");
+          return;
+        }
+        CUSTOM_PRODUCTS.push({code, name, price, category});
+      }
+      saveProductCatalog();
     }
-    CUSTOM_PRODUCTS.push({code, name, price, category});
-  }
 
-  saveProductCatalog();
-  populateProductPicker();
-  renderItems();
-  renderInvoice();
-  cancelProductManagement();
-  alert("تم حفظ بيانات الصنف.");
+    populateProductPicker();
+    renderItems();
+    renderInvoice();
+    cancelProductManagement();
+    alert("تم حفظ بيانات الصنف.");
+  }catch(err){
+    console.error("saveManagedProduct error:", err);
+    alert("تعذر حفظ الصنف في قاعدة البيانات. حالياً صلاحية القراءة مفعلة، وسنفعّل إدارة الأصناف الآمنة بعد إضافة تسجيل الدخول.");
+  }
 }
 
 function cancelProductManagement(){
@@ -1174,6 +1368,7 @@ function itemCardHTML(item){
       </select>
       ${dup ? '<div class="dup-warning">⚠️ هذا الصنف مضاف بالفعل</div>' : ""}
     </div>
+    <div class="selected-product-image">${productImageHTML(getProductByCode(item.code))}</div>
     <div class="item-field">
       <label>اسم الصنف في الفاتورة</label>
       <input class="item-name-input" type="text" value="${escapeHtml(item.name)}"
@@ -1498,8 +1693,9 @@ async function shareWhatsApp(){
 /* =========================================================
    بدء التشغيل
    ========================================================= */
-function init(){
+async function init(){
   loadProductCatalog();
+  await loadProductsFromSupabase();
   generateInvoiceNumber();
   document.getElementById("invoiceNoDisplay").textContent = invoiceNumber;
   document.getElementById("dateDisplay").textContent = formatDate();
