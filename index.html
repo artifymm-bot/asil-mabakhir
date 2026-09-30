@@ -1043,7 +1043,7 @@ function populateProductPicker(){
 function productPickerCardHTML(product){
   const selected = selectedProductCodes.has(product.code);
   const image = product.image_url
-    ? '<img class="product-image" src="' + escapeHtml(product.image_url) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+    ? '<img class="product-image" src="' + escapeHtml(product.image_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="product-picker-no-image">📦</span>'
     : '<div class="product-picker-no-image">📦</div>';
   const category = product.category || "أصناف أخرى";
   return `
