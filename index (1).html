@@ -792,6 +792,119 @@ let discountPercent = 0;
 let clients = [];
 
 /* =========================================================
+   حفظ بيانات العميل داخل الفاتورة
+   ========================================================= */
+let currentInvoiceId = null;
+
+function getCurrentClientData(){
+  return {
+    name: document.getElementById("clientName")?.value.trim() || "",
+    phone: document.getElementById("clientPhone")?.value.trim() || ""
+  };
+}
+
+async function saveCurrentInvoiceToSupabase(){
+  const client = getCurrentClientData();
+  const subtotal = items.reduce((sum,item) => sum + calculateItemTotal(item), 0);
+  const discountAmount = subtotal * ((Number(discountPercent) || 0) / 100);
+  const total = subtotal - discountAmount;
+  let clientId = null;
+
+  const match = clients.find(c =>
+    String(c.name || "").trim() === client.name &&
+    String(c.phone || "").trim() === client.phone
+  );
+
+  if(match){
+    clientId = match.id;
+  }else if(client.name || client.phone){
+    const {data:newClient,error:clientError} = await supabaseClient
+      .from("clients")
+      .insert({name: client.name || "عميل", phone: client.phone})
+      .select("id,name,phone,notes")
+      .single();
+
+    if(clientError){
+      console.error("save client", clientError);
+      alert("تعذر حفظ بيانات العميل.");
+      return null;
+    }
+    clients.push(newClient);
+    clientId = newClient.id;
+  }
+
+  const invoicePayload = {
+    invoice_number: invoiceNumber,
+    client_id: clientId,
+    client_name: client.name,
+    client_phone: client.phone,
+    notes: document.getElementById("notesInput")?.value.trim() || "",
+    discount_percent: Number(discountPercent) || 0,
+    subtotal,
+    discount_amount: discountAmount,
+    total
+  };
+
+  let invoiceResult;
+  if(currentInvoiceId){
+    invoiceResult = await supabaseClient
+      .from("invoices")
+      .update(invoicePayload)
+      .eq("id", currentInvoiceId)
+      .select("id")
+      .single();
+  }else{
+    invoiceResult = await supabaseClient
+      .from("invoices")
+      .upsert(invoicePayload,{onConflict:"invoice_number"})
+      .select("id")
+      .single();
+  }
+
+  if(invoiceResult.error){
+    console.error("save invoice", invoiceResult.error);
+    alert("تعذر حفظ الفاتورة في Supabase.");
+    return null;
+  }
+
+  currentInvoiceId = invoiceResult.data.id;
+
+  const {error:deleteItemsError} = await supabaseClient
+    .from("invoice_items")
+    .delete()
+    .eq("invoice_id", currentInvoiceId);
+
+  if(deleteItemsError){
+    console.error("delete invoice items", deleteItemsError);
+    alert("تم حفظ بيانات الفاتورة لكن تعذر تحديث الأصناف.");
+    return null;
+  }
+
+  const rows = items.filter(i => i.code).map((i,index) => ({
+    invoice_id: currentInvoiceId,
+    product_id: i.productId || null,
+    code: i.code || "",
+    name: i.name || "",
+    quantity: Number(i.qty) || 0,
+    price: Number(i.price) || 0,
+    line_total: calculateItemTotal(i),
+    notes: i.notes || "",
+    sort_order: index
+  }));
+
+  if(rows.length){
+    const {error:itemsError} = await supabaseClient.from("invoice_items").insert(rows);
+    if(itemsError){
+      console.error("save invoice items", itemsError);
+      alert("تم حفظ الفاتورة لكن تعذر حفظ الأصناف.");
+      return null;
+    }
+  }
+
+  return currentInvoiceId;
+}
+
+/* =========================================================
    جهات الاتصال — محفوظة في Supabase
    ========================================================= */
 async function loadClients(){
@@ -1700,7 +1813,8 @@ function preparePrintInvoice(){
   return printWindow;
 }
 
-async function exportPDF(){
+async async function exportPDF(){
+  await saveCurrentInvoiceToSupabase();
   if(items.filter(i => i.code).length === 0){
     alert("أضف صنف واحد على الأقل قبل تصدير الفاتورة");
     return;
@@ -1844,7 +1958,8 @@ function exportInvoiceImage(onReady){
     alert("تعذر إنشاء صورة الفاتورة. حاول مرة أخرى.");
   }
 }
-async function shareWhatsApp(){
+async async function shareWhatsApp(){
+  await saveCurrentInvoiceToSupabase();
   if(items.filter(i => i.code).length === 0){
     alert("أضف صنف واحد على الأقل قبل الإرسال");
     return;
